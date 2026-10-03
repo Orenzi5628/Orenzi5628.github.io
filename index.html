@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>負けトレード反省ノート</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="反省ノート">
+<meta name="theme-color" content="#11151b">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* 03_デザイン.md 案B：ダークで集中できる。1列のスマホ画面。金色は大事なボタンと勝率の数字だけ */
+:root {
+  --bg: #11151b;
+  --surface: #1a2028;
+  --line: #262e38;
+  --ink: #e9edf2;
+  --sub: #94a2b2;
+  --accent: #d2a742;
+  --on-accent: #17130a;
+  --win: #4cc48b;
+  --win-bg: #173328;
+  --loss: #ff7468;
+  --loss-bg: #3a1d1c;
+  --draw-bg: #262e38;
+  --r: 10px;
+  --font: "IBM Plex Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+[hidden] { display: none !important; }
+.app {
+  max-width: 560px; margin-inline: auto;
+  padding-inline: 16px;
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(40px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 18px;
+}
+.screen { display: grid; gap: 18px; }
+
+/* 上の帯 */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+.bar h1, .bar h2 { margin: 0; font-size: 1.1rem; line-height: 1.3; font-weight: 700; }
+.ghost {
+  font: inherit; font-size: 0.95rem; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--sub);
+  padding: 6px 14px; border-radius: 999px; min-height: 40px;
+}
+.back { border: 0; padding-left: 0; color: var(--sub); }
+
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, li[tabindex]:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 2px;
+}
+
+/* 成績 */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.stat .lbl { font-size: 0.85rem; color: var(--sub); }
+.stat .rate { font-size: 2.2rem; font-weight: 700; line-height: 1.1; color: var(--accent); }
+.stat .rate small { font-size: 1rem; margin-left: 2px; }
+.stat .wl { font-size: 0.9rem; color: var(--sub); }
+.stat .pl-lbl { font-size: 0.8rem; color: var(--sub); margin-top: 6px; }
+.stat .pl { font-size: 1.15rem; font-weight: 700; overflow-wrap: anywhere; }
+
+.main-btn {
+  font: inherit; font-weight: 700; font-size: 1.1rem; cursor: pointer;
+  border: 0; border-radius: var(--r); padding: 15px 12px; min-height: 54px; width: 100%;
+  background: var(--accent); color: var(--on-accent);
+}
+.main-btn:disabled { opacity: 0.6; cursor: wait; }
+.sub-btn {
+  font: inherit; font-size: 1rem; cursor: pointer; width: 100%;
+  border: 1px solid var(--line); border-radius: var(--r); padding: 12px; min-height: 48px;
+  background: var(--surface); color: var(--ink);
+}
+.danger-btn {
+  font: inherit; font-size: 0.95rem; cursor: pointer;
+  border: 0; background: transparent; color: var(--loss); padding: 10px 4px; justify-self: start;
+}
+
+/* 一覧 */
+.list-title { font-size: 0.85rem; color: var(--sub); margin: 0 0 -10px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; }
+.list li { padding: 12px 2px; border-top: 1px solid var(--line); display: grid; gap: 4px; cursor: pointer; }
+.list li:last-child { border-bottom: 1px solid var(--line); }
+.row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.date { color: var(--sub); font-size: 0.95rem; }
+.badge { font-size: 0.85rem; font-weight: 700; padding: 1px 10px; border-radius: 999px; white-space: nowrap; }
+.badge.win { background: var(--win-bg); color: var(--win); }
+.badge.loss { background: var(--loss-bg); color: var(--loss); }
+.badge.draw { background: var(--draw-bg); color: var(--sub); }
+.side { font-size: 0.95rem; color: var(--sub); }
+.row1 .money { margin-left: auto; font-weight: 700; }
+.plus { color: var(--win); }
+.minus { color: var(--loss); }
+.zero { color: var(--sub); }
+.why { margin: 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+.why.none { color: var(--sub); }
+.empty { color: var(--sub); border: 1px dashed var(--line); border-radius: var(--r); padding: 18px 14px; margin: 0; }
+
+/* 入力 */
+.form { display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > label, .field > .label { font-size: 0.95rem; color: var(--sub); }
+.field .hint { font-size: 0.82rem; color: var(--sub); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 380px) { .pair { grid-template-columns: 1fr; } }
+input[type="text"], input[type="datetime-local"], input[type="password"], textarea {
+  font: inherit; font-size: 1rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 10px 12px; min-height: 48px; width: 100%; min-width: 0;
+}
+textarea { min-height: 96px; resize: vertical; line-height: 1.6; }
+input.bad, textarea.bad { border-color: var(--loss); }
+.toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.toggle button {
+  font: inherit; font-size: 1rem; cursor: pointer; min-height: 48px;
+  border: 0; background: var(--surface); color: var(--sub);
+}
+.toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
+#stats-body { display: grid; gap: 18px; }
+.stats-sum { margin: 0; color: var(--sub); }
+.stats-sum b { color: var(--ink); }
+.readout { margin: 0; font-size: 0.92rem; color: var(--sub); min-height: 1.6em; }
+.readout b { color: var(--ink); }
+.readout b.plus, .stats-sum b.plus { color: var(--win); }
+.readout b.minus, .stats-sum b.minus { color: var(--loss); }
+.table-wrap { overflow-x: auto; margin-inline: -4px; }
+.trade-table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 0.92rem; }
+.trade-table th { text-align: left; font-weight: 500; font-size: 0.8rem; color: var(--sub); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.trade-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.trade-table .num { text-align: right; }
+.trade-table tbody tr { cursor: pointer; }
+.trade-table tbody tr:hover td { background: #1f2630; }
+.chart-box .bar-hit, .chart-box .cum-hit { cursor: pointer; }
+.candle-info { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 6px; }
+.candle-info .ci-time { font-weight: 700; }
+.ci-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 10px; }
+.ci-grid div { display: grid; min-width: 0; }
+.ci-grid span { font-size: 0.78rem; color: var(--sub); }
+.ci-grid b { font-weight: 700; font-size: 0.98rem; overflow-wrap: anywhere; }
+@media (max-width: 360px) { .ci-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.candle-info .ci-move { font-size: 0.92rem; }
+.chart-box .hit { cursor: pointer; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.toggle.small button { min-height: 36px; font-size: 0.9rem; padding: 0 12px; }
+.errors { margin: 0; padding: 12px 14px; border-radius: var(--r); background: var(--loss-bg); color: var(--loss); display: grid; gap: 2px; }
+
+/* 結果 */
+.head-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.head-line .money { font-size: 1.4rem; font-weight: 700; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.panel h3 { margin: 0; font-size: 1rem; }
+.chart-box { width: 100%; }
+.chart-box svg { display: block; width: 100%; height: auto; }
+.chart-note { margin: 0; font-size: 0.85rem; color: var(--sub); white-space: pre-line; }
+.walk { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.walk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.walk-item {
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer; width: 100%;
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start;
+  background: transparent; border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px;
+}
+.walk-item[aria-pressed="true"] { border-color: var(--accent); background: #1f1b12; }
+.walk-num {
+  grid-row: span 2; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 700; font-size: 0.95rem;
+  border: 2px solid var(--accent); color: var(--accent);
+}
+.walk-item[aria-pressed="true"] .walk-num { background: var(--accent); color: var(--on-accent); }
+.walk-time { font-size: 0.85rem; color: var(--sub); }
+.walk-text { overflow-wrap: anywhere; min-width: 0; }
+.chart-box .pt { cursor: pointer; }
+.reason-summary { margin: 0; font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.reason-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reason-meta { margin: 0; font-size: 0.8rem; color: var(--sub); }
+.status { white-space: pre-line; margin: 0; padding: 10px 12px; border-radius: var(--r); background: var(--draw-bg); color: var(--ink); }
+.status.err { background: var(--loss-bg); color: var(--loss); }
+.detail { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+.detail dt { color: var(--sub); font-size: 0.9rem; }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.manual { display: grid; gap: 10px; }
+.manual p { margin: 0; font-size: 0.92rem; color: var(--sub); }
+
+/* 設定 */
+.radio-row { display: grid; gap: 8px; }
+.radio-row label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; }
+.radio-row input { margin-top: 6px; accent-color: var(--accent); }
+.radio-row small { display: block; color: var(--sub); font-size: 0.85rem; }
+.section-title { margin: 6px 0 -6px; font-size: 1rem; }
+.saved-note { margin: 0; color: var(--win); font-size: 0.9rem; }
+
+/* 確認の小窓 */
+.dialog-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; max-width: 360px; width: 100%; display: grid; gap: 14px; }
+.dialog p { margin: 0; }
+.dialog .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dialog .yes { font: inherit; font-weight: 700; border: 0; border-radius: var(--r); min-height: 48px; background: var(--loss); color: #1a0d0c; cursor: pointer; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-size: 0.95rem; z-index: 20; max-width: calc(100% - 32px); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .screen { animation: fade .18s ease-out; }
+  @keyframes fade { from { opacity: .4; } to { opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ① 一覧画面 -->
+  <section class="screen" id="screen-list">
+    <div class="bar">
+      <h1>負けトレード反省ノート</h1>
+      <button class="ghost" type="button" id="btn-open-settings">設定</button>
+    </div>
+    <div class="stats">
+      <div class="stat" id="stat-month"></div>
+      <div class="stat" id="stat-all"></div>
+    </div>
+    <button class="main-btn" type="button" id="btn-new">＋ 取引を記録する</button>
+    <button class="sub-btn" type="button" id="btn-open-stats">取引結果を表とグラフで見る</button>
+    <p class="list-title">取引の一覧（新しい順）</p>
+    <ul class="list" id="trade-list"></ul>
+    <p class="empty" id="list-empty">まだ記録がありません。取引が終わったら「＋ 取引を記録する」から入れてください。</p>
+  </section>
+
+  <!-- ② 記録画面 -->
+  <section class="screen" id="screen-form" hidden>
+    <div class="bar">
+      <button class="ghost back" type="button" data-go="list">‹ 一覧へ戻る</button>
+      <h2>取引を記録する</h2>
+    </div>
+    <form class="form" id="trade-form" novalidate>
+      <div class="field">
+        <span class="label">買い／売り</span>
+        <div class="toggle" role="group" aria-label="買い／売り">
+          <button type="button" id="side-buy" aria-pressed="true">買い</button>
+          <button type="button" id="side-sell" aria-pressed="false">売り</button>
+        </div>
+      </div>
+      <div class="pair">
+        <div class="field"><label for="in-at">入った日時</label><input type="datetime-local" id="in-at"></div>
+        <div class="field"><label for="in-price">入った値段</label><input type="text" id="in-price" inputmode="decimal" placeholder="例：2650.40" autocomplete="off"></div>
+      </div>
+      <div class="pair">
+        <div class="field"><label for="out-at">出た日時</label><input type="datetime-local" id="out-at"></div>
+        <div class="field"><label for="out-price">出た値段</label><input type="text" id="out-price" inputmode="decimal" placeholder="例：2647.10" autocomplete="off"></div>
+      </div>
+      <div class="field">
+        <label for="pl">損益（円）</label>
+        <input type="text" id="pl" placeholder="例：-3200　（勝ちなら 5600）" autocomplete="off">
+        <span class="hint">履歴に出ている金額をそのまま入れてください。マイナスは「-」をつけます。</span>
+      </div>
+      <div class="field">
+        <label for="memo">一言メモ（空欄でも大丈夫です）</label>
+        <textarea id="memo" placeholder="例：上がりそうな勢いがあったので買った"></textarea>
+      </div>
+      <div class="errors" id="form-errors" hidden></div>
+      <button class="main-btn" type="submit" id="btn-save">保存して分析する</button>
+    </form>
+  </section>
+
+  <!-- ③ 結果画面 -->
+  <section class="screen" id="screen-result" hidden>
+    <div class="bar">
+      <button class="ghost back" type="button" id="btn-result-back">‹ 戻る</button>
+    </div>
+    <div class="head-line" id="result-head"></div>
+
+    <div class="panel">
+      <div class="chart-head">
+        <h3>値動きのグラフ</h3>
+        <div class="toggle small" role="group" aria-label="グラフの形" id="chart-type">
+          <button type="button" id="ct-line" aria-pressed="false">線</button>
+          <button type="button" id="ct-candle" aria-pressed="true">ローソク足</button>
+        </div>
+      </div>
+      <div class="chart-box" id="chart"></div>
+      <p class="chart-note" id="chart-note"></p>
+      <div class="candle-info" id="candle-info" hidden aria-live="polite"></div>
+      <button class="sub-btn" type="button" id="btn-refetch" hidden>ローソク足用に値動きを取り直す</button>
+      <div class="walk" id="walk" hidden>
+        <h3>チャートで見る解説</h3>
+        <ol class="walk-list" id="walk-list"></ol>
+        <p class="chart-note" id="walk-note"></p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 id="reason-title">理由</h3>
+      <p class="status" id="reason-status" hidden></p>
+      <div id="reason-body"></div>
+      <button class="main-btn" type="button" id="btn-reason">理由をもう一度出す</button>
+
+      <div class="manual" id="manual-box">
+        <p id="manual-lead">設定でAIの鍵を入れていないため、自動では理由を出せません。代わりに、下のボタンで相談文をコピーしてClaudeに貼り付け、返ってきた答えをここに貼って保存できます。</p>
+        <button class="sub-btn" type="button" id="btn-copy">Claudeへの相談文をコピー</button>
+        <textarea id="manual-prompt" readonly hidden aria-label="相談文"></textarea>
+        <label for="manual-answer" class="hint" style="color:var(--sub);font-size:.9rem">Claudeの答えを貼り付ける</label>
+        <textarea id="manual-answer" placeholder="ここに答えを貼り付けてください"></textarea>
+        <button class="sub-btn" type="button" id="btn-manual-save">この答えを理由として保存</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>入力した内容</h3>
+      <dl class="detail" id="result-detail"></dl>
+    </div>
+
+    <button class="danger-btn" type="button" id="btn-delete">この記録を消す</button>
+  </section>
+
+  <!-- ⑤ 取引結果（表とグラフ） -->
+  <section class="screen" id="screen-stats" hidden>
+    <div class="bar">
+      <button class="ghost back" type="button" data-go="list">‹ 一覧へ戻る</button>
+      <h2>取引結果</h2>
+    </div>
+    <p class="stats-sum" id="stats-sum"></p>
+    <p class="empty" id="stats-empty" hidden>記録がたまると、ここに表とグラフが出ます。</p>
+    <div id="stats-body">
+      <div class="panel">
+        <h3>収支の推移（これまでの合計）</h3>
+        <div class="chart-box" id="cum-chart"></div>
+        <p class="readout" id="cum-readout">グラフを押すと、その取引の時点の数字がここに出ます。</p>
+      </div>
+      <div class="panel">
+        <h3>月ごとの収支</h3>
+        <div class="chart-box" id="month-chart"></div>
+        <p class="readout" id="month-readout">棒を押すと、その月の数字がここに出ます。</p>
+      </div>
+      <div class="panel">
+        <h3>取引の表（新しい順）</h3>
+        <div class="table-wrap">
+          <table class="trade-table">
+            <thead><tr><th>日付</th><th>結果</th><th>売買</th><th>入った→出た</th><th>持っていた時間</th><th class="num">損益</th><th class="num">その時点の合計</th></tr></thead>
+            <tbody id="trade-table-body"></tbody>
+          </table>
+        </div>
+        <p class="chart-note">行を押すと、その取引の結果画面が開きます。表は横に動かせます。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 設定画面 -->
+  <section class="screen" id="screen-settings" hidden>
+    <div class="bar">
+      <button class="ghost back" type="button" data-go="list">‹ 一覧へ戻る</button>
+      <h2>設定</h2>
+    </div>
+
+    <h3 class="section-title">使うAI</h3>
+    <div class="radio-row" role="radiogroup" aria-label="使うAI">
+      <label><input type="radio" name="ai" id="ai-free" value="free"><span>無料のAI（Google）<small>回数の上限つきで無料。送った内容がAIの改善に使われる場合があります。</small></span></label>
+      <label><input type="radio" name="ai" id="ai-paid" value="paid"><span>有料のAI（Claude）<small>1回数円ほど。より的確な理由が期待できます。</small></span></label>
+    </div>
+
+    <div class="field" id="field-free-key">
+      <label for="key-free">AIの鍵（無料のAI用）</label>
+      <input type="password" id="key-free" autocomplete="off" placeholder="Googleで受け取った鍵を貼り付け">
+    </div>
+    <div class="field" id="field-paid-key">
+      <label for="key-paid">AIの鍵（有料のAI用）</label>
+      <input type="password" id="key-paid" autocomplete="off" placeholder="Claudeで受け取った鍵を貼り付け">
+    </div>
+    <div class="field">
+      <label for="key-price">値動きサービスの鍵</label>
+      <input type="password" id="key-price" autocomplete="off" placeholder="値動きサービスで受け取った鍵を貼り付け">
+      <span class="hint">鍵はこの端末の中だけに保存され、AIと値動きサービスに問い合わせるときだけ使います。</span>
+    </div>
+    <button class="main-btn" type="button" id="btn-save-settings">設定を保存する</button>
+    <p class="saved-note" id="settings-saved" hidden>保存しました。</p>
+
+    <h3 class="section-title">記録の控え</h3>
+    <button class="sub-btn" type="button" id="btn-export">記録の控えを保存</button>
+    <button class="sub-btn" type="button" id="btn-import">控えから戻す</button>
+    <input type="file" id="import-file" hidden>
+    <p class="chart-note">控えは「負けトレード反省ノート_控え_日付.json」というファイルになります。iPhone・iPadでは共有メニューが開くので、AirDropでほかの端末に送ったり、「"ファイル"に保存」を選んだりできます。戻すと、いまの記録は控えの内容に置き換わります。</p>
+  </section>
+
+</div>
+
+<div class="dialog-back" id="dialog" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-msg">
+    <p id="dialog-msg">本当に消しますか？</p>
+    <div class="btns">
+      <button class="sub-btn" type="button" id="dialog-no">やめる</button>
+      <button class="yes" type="button" id="dialog-yes">はい</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ===== 保存（この端末のブラウザの中） =====
+  var KEY_TRADES = 'mtn.trades.v1';
+  var KEY_SETTINGS = 'mtn.settings.v1';
+
+  function load(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+  function store(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { toast('保存できませんでした。ブラウザの保存の設定を確認してください。'); return false; }
+  }
+
+  var trades = load(KEY_TRADES, []);
+  var settings = Object.assign({ ai: 'free', freeKey: '', paidKey: '', priceKey: '' }, load(KEY_SETTINGS, {}));
+  function saveTrades() { return store(KEY_TRADES, trades); }
+
+  // ===== 小さな道具 =====
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function toHalfTime(s) {
+    return String(s).replace(/[０-９：｜]/g, function (c) {
+      return c === '：' ? '：' : c === '｜' ? '｜' : String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    });
+  }
+  function toHalf(s) {
+    return String(s).replace(/[０-９．，]/g, function (c) {
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    });
+  }
+  function parseNum(s) {
+    var t = toHalf(String(s || '')).trim()
+      .replace(/[−ー－‐–—]/g, '-').replace(/[,\s円＋+]/g, '');
+    if (t === '' || t === '-') return NaN;
+    if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
+    return Number(t);
+  }
+  function yen(n) {
+    var abs = Math.abs(n).toLocaleString('ja-JP');
+    if (n > 0) return '+' + abs + '円';
+    if (n < 0) return '−' + abs + '円';
+    return '0円';
+  }
+  function plClass(n) { return n > 0 ? 'plus' : n < 0 ? 'minus' : 'zero'; }
+  function outcome(t) { return t.pl > 0 ? 'win' : t.pl < 0 ? 'loss' : 'draw'; }
+  function outcomeLabel(o) { return o === 'win' ? '勝ち' : o === 'loss' ? '負け' : '引き分け'; }
+  function sideLabel(s) { return s === 'buy' ? '買い' : '売り'; }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function parseLocal(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(s || '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  }
+  function fmtShort(s) { var d = parseLocal(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() : ''; }
+  function fmtFull(s) {
+    var d = parseLocal(s);
+    return d ? d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) : '';
+  }
+  function fmtApi(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':00';
+  }
+  function fmtHM(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function nowLocalInput() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function newId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  var toastTimer;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
+  }
+
+  // ===== 画面の切り替え =====
+  var current = { screen: 'list', tradeId: null };
+  function show(name) {
+    ['list', 'form', 'result', 'settings', 'stats'].forEach(function (n) { $('screen-' + n).hidden = n !== name; });
+    current.screen = name;
+    window.scrollTo(0, 0);
+    if (name === 'list') renderList();
+    if (name === 'stats') renderStats();
+  }
+  document.querySelectorAll('[data-go]').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.getAttribute('data-go')); });
+  });
+
+  // ===== ① 一覧画面 =====
+  function sortedTrades() {
+    return trades.slice().sort(function (a, b) {
+      return (b.inAt || '').localeCompare(a.inAt || '') || (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }
+  function statHtml(label, list) {
+    var w = 0, l = 0, sum = 0;
+    list.forEach(function (t) { if (t.pl > 0) w++; else if (t.pl < 0) l++; sum += t.pl; });
+    var rate = (w + l) ? Math.round(w / (w + l) * 100) : null;
+    return '<span class="lbl">' + esc(label) + '</span>' +
+      '<span class="rate">' + (rate == null ? '−' : rate + '<small>%</small>') + '</span>' +
+      '<span class="wl">' + w + '勝' + l + '敗</span>' +
+      '<span class="pl-lbl">収支</span>' +
+      '<span class="pl ' + plClass(sum) + '">' + yen(sum) + '</span>';
+  }
+  function renderList() {
+    var now = new Date();
+    var ym = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+    var month = trades.filter(function (t) { return (t.inAt || '').slice(0, 7) === ym; });
+    $('stat-month').innerHTML = statHtml('今月（' + (now.getMonth() + 1) + '月）', month);
+    $('stat-all').innerHTML = statHtml('これまで', trades);
+
+    var ul = $('trade-list');
+    var list = sortedTrades();
+    $('list-empty').hidden = list.length > 0;
+    ul.innerHTML = list.map(function (t) {
+      var o = outcome(t);
+      var why = t.reason && t.reason.summary
+        ? '<p class="why">' + esc(t.reason.summary) + '</p>'
+        : '<p class="why none">理由はまだありません</p>';
+      return '<li tabindex="0" data-id="' + esc(t.id) + '">' +
+        '<div class="row1"><span class="date">' + fmtShort(t.inAt) + '</span>' +
+        '<span class="badge ' + o + '">' + outcomeLabel(o) + '</span>' +
+        '<span class="side">' + sideLabel(t.side) + '</span>' +
+        '<span class="money ' + plClass(t.pl) + '">' + yen(t.pl) + '</span></div>' + why + '</li>';
+    }).join('');
+  }
+  $('trade-list').addEventListener('click', function (e) {
+    var li = e.target.closest('li[data-id]');
+    if (li) openResult(li.getAttribute('data-id'));
+  });
+  $('trade-list').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var li = e.target.closest('li[data-id]');
+    if (li) { e.preventDefault(); openResult(li.getAttribute('data-id')); }
+  });
+  $('btn-new').addEventListener('click', openForm);
+  $('btn-open-settings').addEventListener('click', openSettings);
+
+  // ===== ② 記録画面 =====
+  var formSide = 'buy';
+  function setSide(s) {
+    formSide = s;
+    $('side-buy').setAttribute('aria-pressed', s === 'buy');
+    $('side-sell').setAttribute('aria-pressed', s === 'sell');
+  }
+  $('side-buy').addEventListener('click', function () { setSide('buy'); });
+  $('side-sell').addEventListener('click', function () { setSide('sell'); });
+
+  function openForm() {
+    $('trade-form').reset();
+    setSide('buy');
+    $('in-at').value = ''; $('out-at').value = nowLocalInput();
+    $('form-errors').hidden = true;
+    document.querySelectorAll('#trade-form .bad').forEach(function (el) { el.classList.remove('bad'); });
+    show('form');
+  }
+
+  $('trade-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fields = [
+      ['in-at', '入った日時'], ['in-price', '入った値段'],
+      ['out-at', '出た日時'], ['out-price', '出た値段'], ['pl', '損益（円）']
+    ];
+    var errs = [];
+    fields.forEach(function (f) { $(f[0]).classList.remove('bad'); });
+    fields.forEach(function (f) {
+      var v = $(f[0]).value.trim();
+      if (!v) { errs.push(f[1] + 'を入れてください'); $(f[0]).classList.add('bad'); }
+    });
+    var inPrice = parseNum($('in-price').value), outPrice = parseNum($('out-price').value), pl = parseNum($('pl').value);
+    if ($('in-price').value.trim() && !(inPrice > 0)) { errs.push('入った値段は数字で入れてください'); $('in-price').classList.add('bad'); }
+    if ($('out-price').value.trim() && !(outPrice > 0)) { errs.push('出た値段は数字で入れてください'); $('out-price').classList.add('bad'); }
+    if ($('pl').value.trim() && isNaN(pl)) { errs.push('損益は数字で入れてください（例：-3200）'); $('pl').classList.add('bad'); }
+    var inD = parseLocal($('in-at').value), outD = parseLocal($('out-at').value);
+    if (inD && outD && outD < inD) { errs.push('出た日時が、入った日時より前になっています'); $('out-at').classList.add('bad'); }
+
+    if (errs.length) {
+      $('form-errors').innerHTML = errs.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('');
+      $('form-errors').hidden = false;
+      $('form-errors').scrollIntoView({ block: 'center' });
+      return;
+    }
+    var t = {
+      id: newId(), side: formSide,
+      inAt: $('in-at').value, inPrice: inPrice,
+      outAt: $('out-at').value, outPrice: outPrice,
+      pl: pl, memo: $('memo').value.trim(),
+      createdAt: Date.now(), prices: null, reason: null
+    };
+    trades.push(t);
+    if (!saveTrades()) { trades.pop(); return; }
+    openResult(t.id);
+    analyze(t.id);
+  });
+
+  // ===== ③ 結果画面 =====
+  function findTrade(id) { for (var i = 0; i < trades.length; i++) if (trades[i].id === id) return trades[i]; return null; }
+
+  function openResult(id, from) {
+    current.tradeId = id;
+    selectedPoint = null;
+    selectedCandle = null;
+    current.returnTo = from || 'list';
+    renderResult();
+    show('result');
+  }
+
+  function renderResult() {
+    var t = findTrade(current.tradeId);
+    if (!t) { show('list'); return; }
+    var o = outcome(t);
+    $('result-head').innerHTML =
+      '<span class="badge ' + o + '">' + outcomeLabel(o) + '</span>' +
+      '<span class="side">' + sideLabel(t.side) + '・' + fmtShort(t.inAt) + '</span>' +
+      '<span class="money ' + plClass(t.pl) + '">' + yen(t.pl) + '</span>';
+
+    $('result-detail').innerHTML =
+      '<dt>買い／売り</dt><dd>' + sideLabel(t.side) + '</dd>' +
+      '<dt>入った</dt><dd>' + fmtFull(t.inAt) + '　' + esc(t.inPrice) + '</dd>' +
+      '<dt>出た</dt><dd>' + fmtFull(t.outAt) + '　' + esc(t.outPrice) + '</dd>' +
+      '<dt>損益</dt><dd class="' + plClass(t.pl) + '">' + yen(t.pl) + '</dd>' +
+      '<dt>一言メモ</dt><dd>' + (t.memo ? esc(t.memo) : '<span style="color:var(--sub)">なし</span>') + '</dd>';
+
+    renderChart(t);
+
+    $('reason-title').textContent = o === 'win' ? '勝てた理由' : o === 'loss' ? '負けた理由' : 'この結果になった理由';
+    if (t.reason && t.reason.text) {
+      var by = { free: '無料のAI', paid: '有料のAI', manual: 'Claudeに相談して貼り付け' }[t.reason.by] || '';
+      $('reason-body').innerHTML =
+        '<p class="reason-summary">' + esc(t.reason.summary) + '</p>' +
+        '<p class="reason-text">' + esc(t.reason.text) + '</p>' +
+        '<p class="reason-meta">' + esc(by) + '・' + new Date(t.reason.at).toLocaleString('ja-JP') + '</p>';
+    } else {
+      $('reason-body').innerHTML = '<p class="why none">理由はまだありません。</p>';
+    }
+    var hasAi = !!aiKey();
+    var needPrices = !!settings.priceKey && !(t.prices && t.prices.length >= 2);
+    $('btn-reason').hidden = !hasAi && !needPrices;
+    $('btn-reason').textContent = hasAi ? (t.reason ? '理由をもう一度出す' : '理由を出す') : '値動きを取ってくる';
+    $('manual-box').hidden = hasAi;
+    $('manual-prompt').hidden = true;
+    $('manual-answer').value = '';
+    if (!busy[t.id]) setStatus('', false);
+  }
+
+  // グラフ（その時間帯の値動き＋入った・出た印）
+  function renderChart(t) {
+    var box = $('chart'), note = $('chart-note');
+    var pts = (t.prices || []).map(function (p) { return { d: parseLocal(p.t), o: p.o, h: p.h, l: p.l, c: p.c }; })
+      .filter(function (p) { return p.d && isFinite(p.c); });
+    var walk = resolvePoints(t, pts);
+    renderWalk(t, walk, pts.length >= 2);
+    var hasOhlc = pts.length >= 2 && pts.every(function (p) { return isFinite(p.o) && isFinite(p.h) && isFinite(p.l); });
+    var candle = chartType === 'candle' && hasOhlc;
+    $('chart-type').hidden = pts.length < 2;
+    $('ct-line').setAttribute('aria-pressed', chartType !== 'candle');
+    $('ct-candle').setAttribute('aria-pressed', chartType === 'candle');
+    $('btn-refetch').hidden = !(chartType === 'candle' && pts.length >= 2 && !hasOhlc && settings.priceKey);
+    if (pts.length < 2) {
+      box.innerHTML = '';
+      note.textContent = t.prices === null && settings.priceKey
+        ? '値動きはまだ取ってきていません。下のボタンで取ってこられます。'
+        : settings.priceKey ? '値動きを取れませんでした。下のボタンで取り直せます。'
+        : '設定で「値動きサービスの鍵」を入れると、ここにその時間帯のグラフと印が出ます。';
+      return;
+    }
+    var inD = parseLocal(t.inAt), outD = parseLocal(t.outAt);
+    var W = 340, H = 210, L = 54, R = 12, T = 14, B = 30;
+    var t0 = pts[0].d.getTime(), t1 = pts[pts.length - 1].d.getTime();
+    t0 = Math.min(t0, inD.getTime()); t1 = Math.max(t1, outD.getTime());
+    var lo = Infinity, hi = -Infinity;
+    pts.forEach(function (p) { lo = Math.min(lo, candle ? p.l : p.c); hi = Math.max(hi, candle ? p.h : p.c); });
+    lo = Math.min(lo, t.inPrice, t.outPrice); hi = Math.max(hi, t.inPrice, t.outPrice);
+    var padY = (hi - lo) * 0.08 || 1; lo -= padY; hi += padY;
+    var x = function (ms) { return L + (ms - t0) / ((t1 - t0) || 1) * (W - L - R); };
+    var y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
+    var body;
+    if (candle) {
+      // ローソク足：上がった足は緑、下がった足は赤。箱＝始まりと終わり、上下の線＝一番高い・安い値段
+      var cw = Math.max(1.5, Math.min(8, (W - L - R) / pts.length * 0.62));
+      body = pts.map(function (p) {
+        var cx = x(p.d.getTime()), up = p.c >= p.o, col = up ? '#4cc48b' : '#ff7468';
+        var top = y(Math.max(p.o, p.c)), bot = y(Math.min(p.o, p.c));
+        return '<g class="candle"><line x1="' + cx.toFixed(1) + '" x2="' + cx.toFixed(1) + '" y1="' + y(p.h).toFixed(1) + '" y2="' + y(p.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1"/>' +
+          '<rect x="' + (cx - cw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + Math.max(1, bot - top).toFixed(1) +
+          '" fill="' + (up && cw >= 3 ? '#1a2028' : col) + '" stroke="' + col + '" stroke-width="' + (up && cw >= 3 ? 1 : 0) + '"/></g>';
+      }).join('');
+    } else {
+      var path = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p.d.getTime()).toFixed(1) + ' ' + y(p.c).toFixed(1); }).join(' ');
+      body = '<path d="' + path + '" fill="none" stroke="#94a2b2" stroke-width="1.6" stroke-linejoin="round"/>';
+    }
+    var grid = '';
+    for (var g = 0; g <= 3; g++) {
+      var v = lo + (hi - lo) * g / 3, gy = y(v).toFixed(1);
+      grid += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#262e38" stroke-width="1"/>' +
+        '<text x="' + (L - 6) + '" y="' + gy + '" fill="#94a2b2" font-size="10" text-anchor="end" dominant-baseline="middle">' + v.toFixed(1) + '</text>';
+    }
+    var xl = '<text x="' + L + '" y="' + (H - 8) + '" fill="#94a2b2" font-size="10">' + fmtHM(new Date(t0)) + '</text>' +
+      '<text x="' + (W - R) + '" y="' + (H - 8) + '" fill="#94a2b2" font-size="10" text-anchor="end">' + fmtHM(new Date(t1)) + '</text>';
+    function mark(d, price, label, cls) {
+      var mx = x(d.getTime()), my = y(price);
+      var ly = my < T + 22 ? my + 20 : my - 12;
+      var anchor = mx < L + 30 ? 'start' : mx > W - R - 30 ? 'end' : 'middle';
+      return '<g class="' + cls + '"><line x1="' + mx.toFixed(1) + '" x2="' + mx.toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" stroke="#d2a742" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>' +
+        '<circle cx="' + mx.toFixed(1) + '" cy="' + my.toFixed(1) + '" r="5.5" fill="#d2a742" stroke="#11151b" stroke-width="2"/>' +
+        '<text x="' + mx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#d2a742" font-size="12" font-weight="700" text-anchor="' + anchor + '">' + label + '</text></g>';
+    }
+    // 解説の番号（①②③…）。選んだ番号は塗りつぶし＋縦の線で目立たせる
+    var nums = '', guide = '';
+    // 足を押す場所（足と足の間の真ん中で区切った、縦長の見えない帯）と、選んだ足の線
+    var hits = '', pick = '';
+    pts.forEach(function (p, i) {
+      var cx = x(p.d.getTime());
+      var x0 = i ? (cx + x(pts[i - 1].d.getTime())) / 2 : Math.max(L, cx - 4);
+      var x1 = i < pts.length - 1 ? (cx + x(pts[i + 1].d.getTime())) / 2 : Math.min(W - R, cx + 4);
+      hits += '<rect class="hit" data-ci="' + i + '" x="' + x0.toFixed(1) + '" y="' + T + '" width="' + Math.max(1, x1 - x0).toFixed(1) + '" height="' + (H - B - T) + '" fill="#000" fill-opacity="0"/>';
+      if (selectedCandle === i) pick = '<line class="pick" x1="' + cx.toFixed(1) + '" x2="' + cx.toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" stroke="#e9edf2" stroke-width="1" opacity=".55"/>';
+    });
+    walk.forEach(function (p) {
+      if (!p.d || p.price == null || p.d.getTime() < t0 || p.d.getTime() > t1) return;
+      var px = x(p.d.getTime()).toFixed(1), py = y(p.price).toFixed(1), on = selectedPoint === p.n;
+      if (on) guide = '<line x1="' + px + '" x2="' + px + '" y1="' + T + '" y2="' + (H - B) + '" stroke="#d2a742" stroke-width="1.5"/>';
+      nums += '<g class="pt" data-n="' + p.n + '" role="button" tabindex="0" aria-label="解説' + p.n + '">' +
+        '<circle cx="' + px + '" cy="' + py + '" r="16" fill="#000" fill-opacity="0"/>' +
+        '<circle cx="' + px + '" cy="' + py + '" r="' + (on ? 11 : 9) + '" fill="' + (on ? '#d2a742' : '#11151b') + '" stroke="#d2a742" stroke-width="2"/>' +
+        '<text x="' + px + '" y="' + py + '" fill="' + (on ? '#17130a' : '#d2a742') + '" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="central">' + p.n + '</text></g>';
+    });
+    box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="値動きのグラフ。入った所と出た所に金色の印、解説の場所に番号">' +
+      grid + pick + guide + body + hits +
+      mark(inD, t.inPrice, '入った', 'mark-in') + mark(outD, t.outPrice, '出た', 'mark-out') + nums + xl + '</svg>';
+    renderCandleInfo(pts, candle);
+    note.textContent = 'ゴールド（1オンスあたりのドル）・日本時間・' + (t.priceInterval || '') + 'ごと' +
+      (candle ? 'のローソク足（緑の枠＝上がった、赤の塗り＝下がった）' : '') + '。金色の印が入った所と出た所、番号が解説の場所です。グラフを押すと、その時の値段が見られます。' +
+      (chartType === 'candle' && !hasOhlc ? '\nこの記録にはローソク足に必要な値動きがないため、線で表示しています。' +
+        (settings.priceKey ? '下のボタンで取り直せます。' : '') : '');
+  }
+
+  // ===== グラフの形（線／ローソク足）。選んだ形はこの端末に覚えておく =====
+  var KEY_CHART = 'mtn.chartType.v1';
+  var chartType = load(KEY_CHART, 'candle') === 'line' ? 'line' : 'candle';
+  function setChartType(v) {
+    chartType = v;
+    store(KEY_CHART, v);
+    var t = findTrade(current.tradeId);
+    if (t) renderChart(t);
+  }
+  $('ct-line').addEventListener('click', function () { setChartType('line'); });
+  $('ct-candle').addEventListener('click', function () { setChartType('candle'); });
+
+  // 前の版で取った値動き（終わりの値段だけ）を、ローソク足用に取り直す。理由は出し直さない
+  $('btn-refetch').addEventListener('click', function () {
+    var t = findTrade(current.tradeId), btn = this;
+    if (!t || busy[t.id]) return;
+    busy[t.id] = true; btn.disabled = true;
+    btn.textContent = '値動きを取り直しています…';
+    fetchPrices(t).then(function (res) {
+      t.prices = res.prices; t.priceInterval = res.label; saveTrades();
+      selectedCandle = null;
+      toast('ローソク足で表示しました');
+    }).catch(function (e) {
+      toast('失敗しました。もう一度押してください（' + e.message + '）');
+    }).then(function () {
+      busy[t.id] = false; btn.disabled = false;
+      btn.textContent = 'ローソク足用に値動きを取り直す';
+      if (current.tradeId === t.id) renderChart(t);
+    });
+  });
+
+  // ===== チャートで見る解説 =====
+  var selectedPoint = null;
+
+  // AIの「21:10」のような時刻を、グラフの範囲の中の日時に直す
+  function resolvePoints(t, pts) {
+    var raw = (t.reason && Array.isArray(t.reason.points)) ? t.reason.points : [];
+    var inD = parseLocal(t.inAt), outD = parseLocal(t.outAt);
+    if (!inD || !outD) return [];
+    var lo = pts.length ? Math.min(pts[0].d.getTime(), inD.getTime()) : inD.getTime() - 2 * 3600000;
+    var hi = pts.length ? Math.max(pts[pts.length - 1].d.getTime(), outD.getTime()) : outD.getTime() + 3600000;
+    var mid = (inD.getTime() + outD.getTime()) / 2;
+    return raw.map(function (p, i) {
+      var hm = /^(\d{1,2}):(\d{2})$/.exec(p.time || ''), best = null;
+      if (hm) {
+        for (var k = -1; k <= 1; k++) {
+          [inD, outD].forEach(function (base) {
+            var c = new Date(base.getFullYear(), base.getMonth(), base.getDate() + k, +hm[1], +hm[2]);
+            var ms = c.getTime();
+            if (ms >= lo - 600000 && ms <= hi + 600000 && (!best || Math.abs(ms - mid) < Math.abs(best.getTime() - mid))) best = c;
+          });
+        }
+      }
+      var price = null;
+      if (best && pts.length) {
+        var near = pts[0];
+        pts.forEach(function (q) { if (Math.abs(q.d - best) < Math.abs(near.d - best)) near = q; });
+        price = near.c;
+      }
+      return { n: i + 1, time: p.time, text: p.text, d: best, price: price };
+    });
+  }
+
+  function renderWalk(t, walk, hasChart) {
+    var box = $('walk');
+    if (!t.reason) { box.hidden = true; return; }
+    box.hidden = false;
+    if (!walk.length) {
+      $('walk-list').innerHTML = '';
+      $('walk-note').textContent = aiKey()
+        ? '「理由をもう一度出す」を押すと、グラフに番号つきの解説が出ます。'
+        : 'Claudeに相談文を貼り直して答えを保存すると、グラフに番号つきの解説が出ます。';
+      return;
+    }
+    $('walk-list').innerHTML = walk.map(function (p) {
+      return '<li><button type="button" class="walk-item" data-n="' + p.n + '" aria-pressed="' + (selectedPoint === p.n) + '">' +
+        '<span class="walk-num">' + p.n + '</span><span class="walk-time">' + esc(p.time) + '</span>' +
+        '<span class="walk-text">' + esc(p.text) + '</span></button></li>';
+    }).join('');
+    $('walk-note').textContent = hasChart ? '番号を押すと、グラフのその場所が光ります。' : '設定で「値動きサービスの鍵」を入れると、この番号がグラフの上にも出ます。';
+  }
+
+  function selectPoint(n) {
+    selectedPoint = selectedPoint === n ? null : n;
+    var t = findTrade(current.tradeId);
+    if (t) renderChart(t);
+  }
+  $('walk-list').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-n]');
+    if (b) selectPoint(+b.getAttribute('data-n'));
+  });
+  $('chart').addEventListener('click', function (e) {
+    var g = e.target.closest('[data-n]');
+    if (g) { selectPoint(+g.getAttribute('data-n')); return; }
+    var h = e.target.closest('[data-ci]');
+    if (h) selectCandle(+h.getAttribute('data-ci'));
+  });
+
+  // ===== 足を押して値段を見る =====
+  var selectedCandle = null;
+  function selectCandle(i) {
+    selectedCandle = selectedCandle === i ? null : i;
+    var t = findTrade(current.tradeId);
+    if (t) renderChart(t);
+  }
+  function renderCandleInfo(pts, candle) {
+    var box = $('candle-info'), p = selectedCandle == null ? null : pts[selectedCandle];
+    if (!p) { box.hidden = true; return; }
+    box.hidden = false;
+    var f = function (v) { return Number(v).toFixed(2); };
+    if (candle) {
+      var diff = p.c - p.o;
+      box.innerHTML = '<span class="ci-time">' + fmtHM(p.d) + ' の足（' + esc(findTrade(current.tradeId).priceInterval || '') + '）</span>' +
+        '<div class="ci-grid"><div><span>始まり</span><b>' + f(p.o) + '</b></div><div><span>一番高い</span><b>' + f(p.h) + '</b></div>' +
+        '<div><span>一番安い</span><b>' + f(p.l) + '</b></div><div><span>終わり</span><b>' + f(p.c) + '</b></div></div>' +
+        '<span class="ci-move ' + (diff > 0 ? 'plus' : diff < 0 ? 'minus' : 'zero') + '">' +
+        (diff > 0 ? '▲ 上がった　+' : diff < 0 ? '▼ 下がった　−' : '変わらず　') + Math.abs(diff).toFixed(2) + '</span>';
+    } else {
+      box.innerHTML = '<span class="ci-time">' + fmtHM(p.d) + ' の値段</span>' +
+        '<div class="ci-grid"><div><span>終わり</span><b>' + f(p.c) + '</b></div></div>';
+    }
+  }
+  $('chart').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var g = e.target.closest('[data-n]');
+    if (g) { e.preventDefault(); selectPoint(+g.getAttribute('data-n')); }
+  });
+
+  // ===== 理由を出す（値動きの取得 → AI） =====
+  var busy = {};
+  function aiKey() { return settings.ai === 'paid' ? settings.paidKey : settings.freeKey; }
+  function setStatus(msg, isErr) {
+    var el = $('reason-status');
+    el.textContent = msg; el.hidden = !msg;
+    el.classList.toggle('err', !!isErr);
+  }
+
+  function pickInterval(inD, outD) {
+    var hours = (outD - inD) / 3600000 + 3;
+    if (hours <= 6) return ['5min', '5分'];
+    if (hours <= 24) return ['15min', '15分'];
+    if (hours <= 120) return ['1h', '1時間'];
+    return ['4h', '4時間'];
+  }
+
+  function fetchPrices(t) {
+    var inD = parseLocal(t.inAt), outD = parseLocal(t.outAt);
+    var iv = pickInterval(inD, outD);
+    var start = new Date(inD.getTime() - 2 * 3600000), end = new Date(outD.getTime() + 3600000);
+    var url = 'https://api.twelvedata.com/time_series?symbol=' + encodeURIComponent('XAU/USD') +
+      '&interval=' + iv[0] + '&timezone=Asia/Tokyo&order=ASC&outputsize=5000' +
+      '&start_date=' + encodeURIComponent(fmtApi(start)) + '&end_date=' + encodeURIComponent(fmtApi(end)) +
+      '&apikey=' + encodeURIComponent(settings.priceKey);
+    return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || j.status === 'error' || !Array.isArray(j.values)) {
+        throw new Error('値動きを取れませんでした' + (j && j.message ? '（' + j.message + '）' : ''));
+      }
+      var vals = j.values.map(function (v) {
+        return { t: v.datetime.replace(' ', 'T'), o: Number(v.open), h: Number(v.high), l: Number(v.low), c: Number(v.close) };
+      })
+        .filter(function (v) { return isFinite(v.c); })
+        .sort(function (a, b) { return a.t.localeCompare(b.t); });
+      if (vals.length < 2) throw new Error('この時間帯の値動きが見つかりませんでした');
+      return { prices: vals, label: iv[1] };
+    });
+  }
+
+  function buildPrompt(t) {
+    var o = outcome(t);
+    var word = o === 'win' ? '勝ち' : o === 'loss' ? '負け' : '引き分け';
+    var good = o === 'win' ? '良かった' : '悪かった';
+    var lines = [
+      'あなたはゴールド（金）の短期取引の振り返りを手伝う先生です。専門用語は使わず、投資を始めたばかりの人にも分かるやさしい日本語で答えてください。',
+      '次の取引が「' + word + '」になった理由を、値動きのデータをもとに説明してください。',
+      '',
+      '【取引】',
+      '・方向：' + (t.side === 'buy' ? '買い（値上がりを狙った）' : '売り（値下がりを狙った）'),
+      '・入った：' + fmtFull(t.inAt) + '　値段 ' + t.inPrice,
+      '・出た：' + fmtFull(t.outAt) + '　値段 ' + t.outPrice,
+      '・損益：' + yen(t.pl),
+      '・本人のメモ（なぜそこで入ったか）：' + (t.memo || 'なし'),
+      ''
+    ];
+    var pts = t.prices || [];
+    if (pts.length >= 2) {
+      var step = Math.max(1, Math.ceil(pts.length / 80));
+      lines.push('【値動き】ゴールド（1オンスあたりのドル）・日本時間・' + (t.priceInterval || '') + 'ごとの終わりの値段');
+      for (var i = 0; i < pts.length; i += step) lines.push(pts[i].t.replace('T', ' ') + '　' + pts[i].c);
+      if ((pts.length - 1) % step) lines.push(pts[pts.length - 1].t.replace('T', ' ') + '　' + pts[pts.length - 1].c);
+    } else {
+      lines.push('【値動き】データはありません。この日時のゴールドの動きについて分かる範囲で考えてください。');
+    }
+    lines.push('',
+      '【答え方】必ず次の形で答えてください。',
+      '要約：（20文字以内の一言）',
+      '理由：（なぜそのタイミングが' + good + 'のかを3〜5文で。実際の時刻と値段に必ず触れる。本人のメモがあれば、それにも触れる）',
+      '次は：（次の取引で気をつけること、または続けると良いことを1文）',
+      'チャート解説：グラフの上で見てほしい場所を3〜5か所、時刻の早い順に1行ずつ。入った時刻と出た時刻も必ず含める。' +
+        (pts.length >= 2 ? '時刻は上の値動きのデータにある時刻を使う。' : ''),
+      'ポイント1：21:10｜（その時刻に値動きで何が起きていたか、それが取引にどう関係したかを1〜2文）',
+      'ポイント2：…（同じ形で続ける）');
+    return lines.join('\n');
+  }
+
+  function callAi(prompt) {
+    if (settings.ai === 'paid') {
+      return fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': settings.paidKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 900, messages: [{ role: 'user', content: prompt }] })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error('AIから答えをもらえませんでした' + (res.j && res.j.error ? '（' + res.j.error.message + '）' : ''));
+          return (res.j.content || []).map(function (c) { return c.text || ''; }).join('').trim();
+        });
+    }
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(settings.freeKey);
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error('AIから答えをもらえませんでした' + (res.j && res.j.error ? '（' + res.j.error.message + '）' : ''));
+        var c = res.j.candidates && res.j.candidates[0];
+        var text = c && c.content && c.content.parts ? c.content.parts.map(function (p) { return p.text || ''; }).join('') : '';
+        if (!text.trim()) throw new Error('AIの答えが空でした');
+        return text.trim();
+      });
+  }
+
+  function parseAnswer(text) {
+    var clean = String(toHalfTime(text)).replace(/\*\*/g, '').trim();
+    var points = [];
+    clean = clean.replace(/^[ \t]*[-・]?[ \t]*ポイント[ \t]*\d+[ \t]*[：:][ \t]*(\d{1,2})[:：](\d{2})[ \t]*[｜|][ \t]*(.+)$/gm, function (m, h, mi, body) {
+      points.push({ time: (+h) + ':' + mi, text: body.trim() });
+      return '';
+    }).replace(/^[ \t]*チャート解説[：:].*$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+    var m = /要約[：:]\s*(.+)/.exec(clean);
+    var summary = m ? m[1].trim() : clean.split('\n')[0].trim();
+    if (summary.length > 30) summary = summary.slice(0, 30) + '…';
+    var body = m ? clean.replace(m[0], '').trim() : clean;
+    return { summary: summary, text: body || clean, points: points };
+  }
+
+  function analyze(id) {
+    var t = findTrade(id);
+    if (!t || busy[id]) return;
+    var needPrices = !!settings.priceKey && !(t.prices && t.prices.length >= 2);
+    var hasAi = !!aiKey();
+    if (!needPrices && !hasAi) { renderResult(); return; }
+    busy[id] = true;
+    $('btn-reason').disabled = true;
+    var errors = [];
+    var step = needPrices ? fetchPrices(t).then(function (res) {
+      t.prices = res.prices; t.priceInterval = res.label; saveTrades();
+    }).catch(function (e) { errors.push(e.message); }) : Promise.resolve();
+
+    if (current.tradeId === id) setStatus(needPrices ? '値動きを取ってきています…' : 'AIが理由を考えています…', false);
+    step.then(function () {
+      if (current.tradeId === id) { renderResult(); setStatus(hasAi ? 'AIが理由を考えています…' : '', false); }
+      if (!hasAi) return;
+      return callAi(buildPrompt(t)).then(function (text) {
+        var p = parseAnswer(text);
+        t.reason = { summary: p.summary, text: p.text, points: p.points, by: settings.ai, at: Date.now() };
+        selectedPoint = null;
+        saveTrades();
+      }).catch(function (e) { errors.push(e.message || String(e)); });
+    }).then(function () {
+      busy[id] = false;
+      $('btn-reason').disabled = false;
+      if (current.tradeId === id && current.screen === 'result') {
+        renderResult();
+        if (errors.length) setStatus('失敗しました。もう一度押してください。\n' + errors.join('\n'), true);
+      }
+    });
+  }
+
+  $('btn-reason').addEventListener('click', function () {
+    var t = findTrade(current.tradeId);
+    if (!t) return;
+    if (settings.priceKey && !(t.prices && t.prices.length >= 2)) t.prices = null;
+    analyze(t.id);
+  });
+
+  // 鍵がないとき：Claudeへの相談文をコピーして、答えを貼って保存
+  $('btn-copy').addEventListener('click', function () {
+    var t = findTrade(current.tradeId);
+    if (!t) return;
+    var text = buildPrompt(t);
+    var ta = $('manual-prompt');
+    ta.value = text;
+    var fallback = function () {
+      ta.hidden = false; ta.focus(); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      toast(ok ? '相談文をコピーしました' : '下の文を選んでコピーしてください');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('相談文をコピーしました。Claudeに貼り付けてください'); }, fallback);
+    } else { fallback(); }
+  });
+  $('btn-manual-save').addEventListener('click', function () {
+    var t = findTrade(current.tradeId);
+    var v = $('manual-answer').value.trim();
+    if (!t) return;
+    if (!v) { $('manual-answer').classList.add('bad'); toast('答えを貼り付けてください'); return; }
+    $('manual-answer').classList.remove('bad');
+    var p = parseAnswer(v);
+    t.reason = { summary: p.summary, text: p.text, points: p.points, by: 'manual', at: Date.now() };
+    selectedPoint = null;
+    saveTrades();
+    renderResult();
+    toast('理由を保存しました');
+  });
+
+  // 記録を消す（確認つき）
+  $('btn-delete').addEventListener('click', function () { $('dialog').hidden = false; $('dialog-no').focus(); });
+  $('dialog-no').addEventListener('click', function () { $('dialog').hidden = true; });
+  $('dialog-yes').addEventListener('click', function () {
+    $('dialog').hidden = true;
+    trades = trades.filter(function (t) { return t.id !== current.tradeId; });
+    saveTrades();
+    current.tradeId = null;
+    show(current.returnTo || 'list');
+    toast('記録を消しました');
+  });
+
+  // ===== ⑤ 取引結果（表とグラフ） =====
+  $('btn-open-stats').addEventListener('click', function () { show('stats'); });
+  $('btn-result-back').addEventListener('click', function () { show(current.returnTo || 'list'); });
+
+  function chrono() {
+    return trades.slice().sort(function (a, b) {
+      return (a.inAt || '').localeCompare(b.inAt || '') || (a.createdAt || 0) - (b.createdAt || 0);
+    });
+  }
+  // 目盛り用：0を含む、きりのいい刻み
+  function niceTicks(lo, hi, n) {
+    var span = hi - lo || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var step = [1, 2, 2.5, 5, 10].map(function (k) { return k * mag; }).filter(function (v) { return v >= raw; })[0];
+    var out = [];
+    for (var v = Math.floor(lo / step) * step; v <= hi + step * 0.001; v += step) out.push(Math.round(v));
+    return out;
+  }
+  function yenShort(v) {
+    var a = Math.abs(v), sign = v > 0 ? '+' : v < 0 ? '−' : '';
+    if (a >= 10000) return sign + (a / 10000).toFixed(a % 10000 ? 1 : 0) + '万';
+    return sign + a.toLocaleString('ja-JP');
+  }
+  function held(t) {
+    var a = parseLocal(t.inAt), b = parseLocal(t.outAt);
+    if (!a || !b) return '';
+    var m = Math.round((b - a) / 60000), h = Math.floor(m / 60);
+    if (m < 60) return m + '分';
+    if (h < 48) return h + '時間' + (m % 60 ? (m % 60) + '分' : '');
+    return Math.floor(h / 24) + '日' + (h % 24 ? (h % 24) + '時間' : '');
+  }
+
+  var cumSel = null, monthSel = null;
+  function renderStats() {
+    var list = chrono();
+    var w = 0, l = 0, sum = 0;
+    list.forEach(function (t) { if (t.pl > 0) w++; else if (t.pl < 0) l++; sum += t.pl; });
+    $('stats-empty').hidden = list.length > 0;
+    $('stats-body').hidden = list.length === 0;
+    $('stats-sum').innerHTML = list.length
+      ? '全' + list.length + '件・' + w + '勝' + l + '敗・勝率 <b>' + ((w + l) ? Math.round(w / (w + l) * 100) + '%' : '−') + '</b>・収支 <b class="' + plClass(sum) + '">' + yen(sum) + '</b>'
+      : '';
+    if (!list.length) return;
+    cumSel = null; monthSel = null;
+    renderCum(list);
+    renderMonths(list);
+    renderTable(list);
+  }
+
+  // 収支の推移：0から始まり、取引ごとに合計がどう動いたか（1本の線）
+  function renderCum(list) {
+    var run = 0, pts = [{ v: 0, t: null }];
+    list.forEach(function (t) { run += t.pl; pts.push({ v: run, t: t }); });
+    var W = 340, H = 200, L = 52, R = 14, T = 14, B = 28;
+    var lo = Math.min(0, Math.min.apply(null, pts.map(function (p) { return p.v; })));
+    var hi = Math.max(0, Math.max.apply(null, pts.map(function (p) { return p.v; })));
+    var ticks = niceTicks(lo, hi, 3); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+    if (hi === lo) hi = lo + 1;
+    var x = function (i) { return L + i / (pts.length - 1) * (W - L - R); };
+    var y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
+    var g = ticks.map(function (v) {
+      return '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="' + (v === 0 ? '#94a2b2' : '#262e38') + '" stroke-width="1"' + (v === 0 ? ' stroke-dasharray="4 3"' : '') + '/>' +
+        '<text x="' + (L - 6) + '" y="' + y(v).toFixed(1) + '" fill="#94a2b2" font-size="10" text-anchor="end" dominant-baseline="middle">' + yenShort(v) + '</text>';
+    }).join('');
+    var path = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' ');
+    var last = pts[pts.length - 1], lx = x(pts.length - 1), ly = y(last.v), col = last.v > 0 ? '#4cc48b' : last.v < 0 ? '#ff7468' : '#94a2b2';
+    var hits = pts.map(function (p, i) {
+      if (!i) return '';
+      var x0 = (x(i) + x(i - 1)) / 2, x1 = i < pts.length - 1 ? (x(i) + x(i + 1)) / 2 : W - R;
+      return '<rect class="cum-hit" data-i="' + i + '" x="' + x0.toFixed(1) + '" y="' + T + '" width="' + Math.max(1, x1 - x0).toFixed(1) + '" height="' + (H - T - B) + '" fill="#000" fill-opacity="0"/>';
+    }).join('');
+    var sel = '';
+    if (cumSel != null) {
+      var sx = x(cumSel).toFixed(1), sy = y(pts[cumSel].v).toFixed(1);
+      sel = '<line x1="' + sx + '" x2="' + sx + '" y1="' + T + '" y2="' + (H - B) + '" stroke="#e9edf2" stroke-width="1" opacity=".5"/>' +
+        '<circle cx="' + sx + '" cy="' + sy + '" r="5" fill="#e9edf2" stroke="#1a2028" stroke-width="2"/>';
+    }
+    var first = list[0], lastT = list[list.length - 1];
+    $('cum-chart').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="これまでの収支の合計の推移。いまの合計は' + yen(last.v) + '">' + g +
+      '<path class="cum-line" d="' + path + '" fill="none" stroke="#e9edf2" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + sel +
+      '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="4.5" fill="' + col + '" stroke="#1a2028" stroke-width="2"/>' +
+      '<text x="' + (lx - 8).toFixed(1) + '" y="' + (ly < T + 16 ? ly + 16 : ly - 10).toFixed(1) + '" fill="#e9edf2" font-size="11" font-weight="700" text-anchor="end">' + yen(last.v) + '</text>' +
+      '<text x="' + L + '" y="' + (H - 8) + '" fill="#94a2b2" font-size="10">' + fmtShort(first.inAt) + '</text>' +
+      '<text x="' + (W - R) + '" y="' + (H - 8) + '" fill="#94a2b2" font-size="10" text-anchor="end">' + fmtShort(lastT.inAt) + '</text>' + hits + '</svg>';
+    $('cum-chart').onclick = function (e) {
+      var h = e.target.closest('[data-i]');
+      if (!h) return;
+      var i = +h.getAttribute('data-i');
+      cumSel = cumSel === i ? null : i;
+      renderCum(list);
+      if (cumSel != null) {
+        var p = pts[cumSel];
+        $('cum-readout').innerHTML = cumSel + '件目（' + fmtShort(p.t.inAt) + '・' + outcomeLabel(outcome(p.t)) + '）：損益 <b class="' + plClass(p.t.pl) + '">' + yen(p.t.pl) + '</b> → 合計 <b class="' + plClass(p.v) + '">' + yen(p.v) + '</b>';
+      }
+    };
+    if (cumSel == null) $('cum-readout').textContent = 'グラフを押すと、その取引の時点の数字がここに出ます。';
+  }
+
+  // 月ごとの収支：最初の月から最後の月まで（最大12か月）。プラスは上に緑、マイナスは下に赤
+  function renderMonths(list) {
+    var map = {};
+    list.forEach(function (t) {
+      var k = (t.inAt || '').slice(0, 7);
+      if (!map[k]) map[k] = { sum: 0, w: 0, l: 0, n: 0 };
+      map[k].sum += t.pl; map[k].n++; if (t.pl > 0) map[k].w++; else if (t.pl < 0) map[k].l++;
+    });
+    var keys = Object.keys(map).sort(), months = [];
+    var y0 = +keys[0].slice(0, 4), m0 = +keys[0].slice(5, 7) - 1, yl = +keys[keys.length - 1].slice(0, 4), ml = +keys[keys.length - 1].slice(5, 7) - 1;
+    var yy = y0, mm = m0;
+    while (yy < yl || (yy === yl && mm <= ml)) {
+      var k = yy + '-' + pad(mm + 1);
+      months.push({ k: k, y: yy, m: mm + 1, d: map[k] || { sum: 0, w: 0, l: 0, n: 0 } });
+      mm++; if (mm > 11) { mm = 0; yy++; }
+    }
+    months = months.slice(-12);
+    var spansYears = months[0].y !== months[months.length - 1].y;
+    var W = 340, H = 200, L = 52, R = 10, T = 18, B = 28;
+    var lo = Math.min(0, Math.min.apply(null, months.map(function (o) { return o.d.sum; })));
+    var hi = Math.max(0, Math.max.apply(null, months.map(function (o) { return o.d.sum; })));
+    var ticks = niceTicks(lo, hi, 3); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+    if (hi === lo) hi = lo + 1;
+    var y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
+    var slot = (W - L - R) / months.length, bw = Math.min(36, slot * 0.6), r = Math.min(4, bw / 2);
+    var g = ticks.map(function (v) {
+      return '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="' + (v === 0 ? '#94a2b2' : '#262e38') + '" stroke-width="1"/>' +
+        '<text x="' + (L - 6) + '" y="' + y(v).toFixed(1) + '" fill="#94a2b2" font-size="10" text-anchor="end" dominant-baseline="middle">' + yenShort(v) + '</text>';
+    }).join('');
+    var showLabels = months.length <= 6;
+    var bars = months.map(function (o, i) {
+      var cx = L + slot * (i + 0.5), v = o.d.sum, y0p = y(0), yv = y(v), h = Math.abs(yv - y0p);
+      var col = v > 0 ? '#4cc48b' : '#ff7468', bar = '';
+      if (h >= 0.5) {
+        var rr = Math.min(r, h), xl = cx - bw / 2, xr = cx + bw / 2;
+        // 0の線から伸ばし、先端だけ角を丸める
+        bar = v > 0
+          ? '<path d="M' + xl + ' ' + y0p + ' V' + (yv + rr) + ' Q' + xl + ' ' + yv + ' ' + (xl + rr) + ' ' + yv + ' H' + (xr - rr) + ' Q' + xr + ' ' + yv + ' ' + xr + ' ' + (yv + rr) + ' V' + y0p + ' Z" fill="' + col + '"' + (monthSel === i ? ' stroke="#e9edf2" stroke-width="1.5"' : '') + '/>'
+          : '<path d="M' + xl + ' ' + y0p + ' V' + (yv - rr) + ' Q' + xl + ' ' + yv + ' ' + (xl + rr) + ' ' + yv + ' H' + (xr - rr) + ' Q' + xr + ' ' + yv + ' ' + xr + ' ' + (yv - rr) + ' V' + y0p + ' Z" fill="' + col + '"' + (monthSel === i ? ' stroke="#e9edf2" stroke-width="1.5"' : '') + '/>';
+      }
+      var lab = showLabels && o.d.n ? '<text x="' + cx.toFixed(1) + '" y="' + (v >= 0 ? yv - 5 : yv + 13).toFixed(1) + '" fill="#e9edf2" font-size="10" font-weight="700" text-anchor="middle">' + yenShort(v) + '</text>' : '';
+      var name = '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" fill="#94a2b2" font-size="10" text-anchor="middle">' + (spansYears ? String(o.y).slice(2) + '/' + o.m : o.m + '月') + '</text>';
+      var hit = '<rect class="bar-hit" data-m="' + i + '" x="' + (L + slot * i).toFixed(1) + '" y="' + T + '" width="' + slot.toFixed(1) + '" height="' + (H - T - B + 20) + '" fill="#000" fill-opacity="0"/>';
+      return '<g class="mbar">' + bar + lab + name + hit + '</g>';
+    }).join('');
+    $('month-chart').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="月ごとの収支の棒グラフ">' + g + bars + '</svg>';
+    $('month-chart').onclick = function (e) {
+      var h = e.target.closest('[data-m]');
+      if (!h) return;
+      var i = +h.getAttribute('data-m');
+      monthSel = monthSel === i ? null : i;
+      renderMonths(list);
+      if (monthSel != null) {
+        var o = months[monthSel];
+        $('month-readout').innerHTML = o.y + '年' + o.m + '月：収支 <b class="' + plClass(o.d.sum) + '">' + yen(o.d.sum) + '</b>（' + o.d.n + '件・' + o.d.w + '勝' + o.d.l + '敗）';
+      }
+    };
+    if (monthSel == null) $('month-readout').textContent = '棒を押すと、その月の数字がここに出ます。' + (showLabels ? '' : '（月が多いときは、棒の上の数字を省いています）');
+  }
+
+  function renderTable(list) {
+    var run = 0, rows = list.map(function (t) { run += t.pl; return { t: t, cum: run }; }).reverse();
+    $('trade-table-body').innerHTML = rows.map(function (r) {
+      var t = r.t, o = outcome(t);
+      return '<tr data-id="' + esc(t.id) + '"><td>' + fmtShort(t.inAt) + ' ' + esc((t.inAt || '').slice(11, 16)) + '</td>' +
+        '<td><span class="badge ' + o + '">' + outcomeLabel(o) + '</span></td><td>' + sideLabel(t.side) + '</td>' +
+        '<td>' + esc(t.inPrice) + ' → ' + esc(t.outPrice) + '</td><td>' + held(t) + '</td>' +
+        '<td class="num ' + plClass(t.pl) + '">' + yen(t.pl) + '</td><td class="num ' + plClass(r.cum) + '">' + yen(r.cum) + '</td></tr>';
+    }).join('');
+  }
+  $('trade-table-body').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]');
+    if (tr) openResult(tr.getAttribute('data-id'), 'stats');
+  });
+
+  // ===== ④ 設定画面 =====
+  function syncKeyFields() {
+    var paid = $('ai-paid').checked;
+    $('field-free-key').hidden = paid;
+    $('field-paid-key').hidden = !paid;
+  }
+  function openSettings() {
+    $('ai-free').checked = settings.ai !== 'paid';
+    $('ai-paid').checked = settings.ai === 'paid';
+    $('key-free').value = settings.freeKey || '';
+    $('key-paid').value = settings.paidKey || '';
+    $('key-price').value = settings.priceKey || '';
+    $('settings-saved').hidden = true;
+    syncKeyFields();
+    show('settings');
+  }
+  $('ai-free').addEventListener('change', syncKeyFields);
+  $('ai-paid').addEventListener('change', syncKeyFields);
+  $('btn-save-settings').addEventListener('click', function () {
+    settings = {
+      ai: $('ai-paid').checked ? 'paid' : 'free',
+      freeKey: $('key-free').value.trim(),
+      paidKey: $('key-paid').value.trim(),
+      priceKey: $('key-price').value.trim()
+    };
+    if (store(KEY_SETTINGS, settings)) { $('settings-saved').hidden = false; toast('設定を保存しました'); }
+  });
+
+  $('btn-export').addEventListener('click', function () {
+    var d = new Date();
+    var name = '負けトレード反省ノート_控え_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json';
+    var json = JSON.stringify({ app: 'mtn', version: 1, savedAt: d.toISOString(), trades: trades }, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    // iPhone・iPad：共有メニューを出す（AirDrop・「ファイル」に保存・メールなどを選べる）
+    var file = null;
+    try { file = new File([json], name, { type: 'application/json' }); } catch (e) {}
+    if (file && navigator.maxTouchPoints > 0 && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: '負けトレード反省ノートの控え' }).then(function () {
+        toast('控えを送りました（' + trades.length + '件）');
+      }, function (e) {
+        if (!e || e.name !== 'AbortError') toast('控えを送れませんでした。もう一度押してください');
+      });
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('控えを保存しました（' + trades.length + '件）');
+  });
+  $('btn-import').addEventListener('click', function () { $('import-file').value = ''; $('import-file').click(); });
+  $('import-file').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var j = JSON.parse(reader.result);
+        var list = Array.isArray(j) ? j : j.trades;
+        if (!Array.isArray(list)) throw new Error();
+        list = list.filter(function (t) { return t && t.id && t.inAt && typeof t.pl === 'number'; });
+        trades = list;
+        saveTrades();
+        toast('控えから戻しました（' + list.length + '件）');
+        show('list');
+      } catch (e) { toast('このファイルは控えとして読めませんでした'); }
+    };
+    reader.readAsText(f);
+  });
+
+  show('list');
+})();
+</script>
+</body>
+</html>
