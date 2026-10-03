@@ -392,6 +392,14 @@ input.bad, textarea.bad { border-color: var(--loss); }
     <button class="sub-btn" type="button" id="btn-export">記録の控えを保存</button>
     <button class="sub-btn" type="button" id="btn-import">控えから戻す</button>
     <input type="file" id="import-file" hidden>
+
+    <h3 class="section-title">文字で控えを移す</h3>
+    <p class="chart-note">ファイルがうまく保存できないときや、別の端末へ移すときに使います。同じApple IDのiPadとiPhoneなら、片方でコピーして、もう片方でそのまま貼り付けられます。</p>
+    <button class="sub-btn" type="button" id="btn-copy-backup">控えを文字でコピー</button>
+    <textarea id="backup-out" readonly hidden aria-label="コピーする控え"></textarea>
+    <textarea id="backup-in" placeholder="ここにコピーした控えを貼り付け" aria-label="貼り付ける控え"></textarea>
+    <button class="sub-btn" type="button" id="btn-paste-restore">貼り付けた控えで戻す</button>
+    <p class="chart-note">貼り付けて戻すと、控えの記録がこの端末の記録に加わります。同じ記録は控えの内容で上書きされ、ほかの記録は消えません。</p>
     <p class="chart-note">控えは「負けトレード反省ノート_控え_日付.json」というファイルになります。iPhone・iPadでは共有メニューが開くので、AirDropでほかの端末に送ったり、「"ファイル"に保存」を選んだりできます。戻すと、いまの記録は控えの内容に置き換わります。</p>
   </section>
 
@@ -1292,10 +1300,10 @@ input.bad, textarea.bad { border-color: var(--loss); }
     var d = new Date();
     var name = '負けトレード反省ノート_控え_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json';
     var json = JSON.stringify({ app: 'mtn', version: 1, savedAt: d.toISOString(), trades: trades }, null, 2);
-    var blob = new Blob([json], { type: 'application/json' });
+    var blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     // iPhone・iPad：共有メニューを出す（AirDrop・「ファイル」に保存・メールなどを選べる）
     var file = null;
-    try { file = new File([json], name, { type: 'application/json' }); } catch (e) {}
+    try { file = new File([json], name, { type: 'application/json;charset=utf-8' }); } catch (e) {}
     if (file && navigator.maxTouchPoints > 0 && navigator.canShare && navigator.canShare({ files: [file] })) {
       navigator.share({ files: [file], title: '負けトレード反省ノートの控え' }).then(function () {
         toast('控えを送りました（' + trades.length + '件）');
@@ -1310,6 +1318,49 @@ input.bad, textarea.bad { border-color: var(--loss); }
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     toast('控えを保存しました（' + trades.length + '件）');
   });
+  // 文字で控えを移す
+  function backupJson() { return JSON.stringify({ app: 'mtn', version: 1, savedAt: new Date().toISOString(), trades: trades }); }
+  function readBackup(text) {
+    var j = JSON.parse(String(text).trim());
+    var list = Array.isArray(j) ? j : j && j.trades;
+    if (!Array.isArray(list)) throw new Error('not backup');
+    return list.filter(function (t) { return t && t.id && t.inAt && typeof t.pl === 'number'; });
+  }
+  $('btn-copy-backup').addEventListener('click', function () {
+    var text = backupJson(), ta = $('backup-out');
+    ta.value = text;
+    var fallback = function () {
+      ta.hidden = false; ta.focus(); ta.select();
+      try { ta.setSelectionRange(0, text.length); } catch (e) {}
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      toast(ok ? '控えをコピーしました（' + trades.length + '件）' : '下の枠の文字を全部選んでコピーしてください');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        ta.hidden = true;
+        toast('控えをコピーしました（' + trades.length + '件）。移したい端末で貼り付けてください');
+      }, fallback);
+    } else { fallback(); }
+  });
+  $('btn-paste-restore').addEventListener('click', function () {
+    var v = $('backup-in').value;
+    if (!v.trim()) { $('backup-in').classList.add('bad'); toast('控えを貼り付けてください'); return; }
+    var list;
+    try { list = readBackup(v); } catch (e) { $('backup-in').classList.add('bad'); toast('貼り付けた文字は控えとして読めませんでした。最初から最後まで全部コピーされているか確かめてください'); return; }
+    $('backup-in').classList.remove('bad');
+    var byId = {};
+    trades.forEach(function (t) { byId[t.id] = t; });
+    list.forEach(function (t) { byId[t.id] = t; });
+    var merged = Object.keys(byId).map(function (k) { return byId[k]; });
+    var before = trades;
+    trades = merged;
+    if (!saveTrades()) { trades = before; return; }
+    $('backup-in').value = '';
+    toast('控えから' + list.length + '件を戻しました（全部で' + trades.length + '件）');
+    show('list');
+  });
+
   $('btn-import').addEventListener('click', function () { $('import-file').value = ''; $('import-file').click(); });
   $('import-file').addEventListener('change', function () {
     var f = this.files && this.files[0];
@@ -1317,10 +1368,7 @@ input.bad, textarea.bad { border-color: var(--loss); }
     var reader = new FileReader();
     reader.onload = function () {
       try {
-        var j = JSON.parse(reader.result);
-        var list = Array.isArray(j) ? j : j.trades;
-        if (!Array.isArray(list)) throw new Error();
-        list = list.filter(function (t) { return t && t.id && t.inAt && typeof t.pl === 'number'; });
+        var list = readBackup(reader.result);
         trades = list;
         saveTrades();
         toast('控えから戻しました（' + list.length + '件）');
