@@ -1,4 +1,4 @@
-"""お金の2Dアニメ「ユイとフクロウ先生 〜お金と72の法則〜」のレンダラー。
+"""お金の2Dアニメ「ユイとネコ先生 〜大学生のためのお金と72の法則〜」のレンダラー。
 
 - 音声: tts.py が VOICEVOX で作った line*.wav と visemes.json（母音タイミング）
 - 絵: Pillow で 1 コマずつ描画（カメラのズーム・カット、口パク、エフェクト）
@@ -20,6 +20,7 @@ from multiprocessing import Pool
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import cat
 import sound
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +41,7 @@ for i, row in enumerate(open(os.path.join(HERE, "lines.tsv"), encoding="utf-8"))
     LINES.append({"who": who, "text": text, "pcm": pcm, "vis": VIS[i]})
 
 INTRO, OUTRO = 1.6, 3.0
-GAPS = {1: 0.85, 5: 0.15}      # セリフ前の間（1: フクロウ登場, 5: 「待った！」は食い気味）
+GAPS = {1: 0.85, 5: 0.15}      # セリフ前の間（1: ネコ先生登場, 5: 「待った！」は食い気味）
 t = INTRO
 for i, ln in enumerate(LINES):
     t += GAPS.get(i, 0.25) if i else 0
@@ -57,10 +58,10 @@ SFX = [  # (秒, 種類)
     (ST[0] + 1.25, "coin"),
     (ST[1] - 1.0, "whoosh"),
     (ST[2] - 0.05, "gaan"),
-    (ST[3] + 3.0, "pop"),
+    (ST[3] + 3.0, "pop"), (ST[3] + 5.6, "pop"),
     (ST[4] - 0.05, "kira"),
     (ST[5] - 0.1, "stop"),
-    (ST[5] + 1.7, "pop"), (ST[5] + 2.5, "pop"), (ST[5] + 3.3, "pop"), (ST[5] + 5.3, "kira"),
+    (ST[5] + 2.3, "pop"), (ST[5] + 3.3, "pop"), (ST[5] + 3.9, "pop"), (ST[5] + 4.5, "pop"), (ST[5] + 6.0, "kira"),
     (ST[6] - 0.1, "grow"), (ST[6] + 1.3, "coin"),
     (END + 0.4, "whoosh"), (END + 1.1, "kira"),
 ]
@@ -125,7 +126,7 @@ CAMS = {  # 場面ごとの (中心x, 中心y, ズーム, 切り替え方)
     2: ((330, 330, 2.05), "cut"),
     3: (BOARD_CAM, "cut"),
     4: ((330, 330, 2.05), "cut"),
-    5: ((1120, 300, 2.0), "cut"),
+    5: ((1100, 235, 1.8), "cut"),
     6: (WIDE, "ease"),
     7: (WIDE, "cut"),
 }
@@ -269,7 +270,7 @@ def room(c, tm, idx):
     # ラグ
     c.ell(60, 590, 560, 690, fill=(255, 190, 170, 200))
     c.ell(100, 600, 520, 680, outline=(255, 255, 255, 160), w=3)
-    # 本棚（フクロウの止まり木）
+    # 本棚
     c.rect(1030, 320, 1250, 560, fill=(165, 110, 72), outline=INK, w=4, r=4)
     cols = [(232, 96, 96), (96, 150, 225), (245, 205, 85), (112, 192, 122), (198, 122, 200), (255, 150, 90)]
     for i, col in enumerate(cols):
@@ -425,16 +426,18 @@ def yui(c, tm, mood, idx):
     hair, hair_sh, hair_hi = (88, 58, 48), (64, 40, 34), (140, 98, 80)
     c.rect(x - 95, hy - 40, x + 95, hy + 135, fill=hair, r=40)
     c.ell(x - 100, hy - 105, x + 100, hy + 80, fill=hair)
-    # 脚
-    c.rect(x - 40, y + 200, x - 14, 594, fill=SKIN, outline=INK, w=3)
-    c.rect(x + 14, y + 200, x + 40, 594, fill=SKIN, outline=INK, w=3)
-    c.rect(x - 46, 580, x - 10, 600, fill=(150, 70, 60), outline=INK, w=3, r=8)
-    c.rect(x + 10, 580, x + 46, 600, fill=(150, 70, 60), outline=INK, w=3, r=8)
-    # スカート
     by = y + 95 + breathe
-    c.poly([(x - 62, by + 75), (x + 62, by + 75), (x + 88, by + 150), (x - 88, by + 150)], fill=(60, 75, 130), outline=INK, w=4)
-    for k in (-40, 0, 40):
-        c.line([(x + k * 0.7, by + 80), (x + k, by + 146)], (45, 58, 105), 3)
+    denim, denim_dk = (80, 110, 160), (60, 85, 130)
+    # ジーンズ
+    c.rect(x - 58, by + 70, x + 58, by + 118, fill=denim, outline=INK, w=4, r=10)
+    c.poly([(x - 56, by + 100), (x - 4, by + 100), (x - 8, 590), (x - 50, 590)], fill=denim, outline=INK, w=3)
+    c.poly([(x + 4, by + 100), (x + 56, by + 100), (x + 50, 590), (x + 8, 590)], fill=denim, outline=INK, w=3)
+    c.line([(x - 30, by + 120), (x - 30, 584)], denim_dk, 2)
+    c.line([(x + 30, by + 120), (x + 30, 584)], denim_dk, 2)
+    # スニーカー
+    for sx in (-30, 30):
+        c.rect(x + sx - 26, 578, x + sx + 26, 602, fill=(255, 255, 255), outline=INK, w=3, r=10)
+        c.rect(x + sx - 26, 594, x + sx + 26, 602, fill=(230, 100, 90), r=3)
     # 腕（ポーズ）
     sl, sr = (x - 52, by + 10), (x + 52, by + 10)
     if mood == "excited":
@@ -451,15 +454,21 @@ def yui(c, tm, mood, idx):
     for s0, h in ((sl, hl), (sr, hr)):
         mid = ((s0[0] + h[0]) / 2 + (8 if h[0] > x else -8), (s0[1] + h[1]) / 2)
         c.line([s0, mid, h], INK, 26)
-        c.line([s0, mid, h], (255, 255, 255), 19)
+        c.line([s0, mid, h], (238, 196, 120), 19)
         c.circ(h[0], h[1], 13, fill=SKIN, outline=INK, w=3)
-    # 胴体（セーラー服）
-    c.rect(x - 62, by, x + 62, by + 85, fill=(255, 255, 255), outline=INK, w=4, r=26)
-    c.poly([(x - 60, by + 4), (x + 60, by + 4), (x + 40, by + 40), (x, by + 58), (x - 40, by + 40)], fill=(60, 75, 130), outline=INK, w=3)
-    c.poly([(x - 30, by + 6), (x + 30, by + 6), (x, by + 44)], fill=(255, 255, 255))
-    c.poly([(x, by + 44), (x - 26, by + 30), (x - 30, by + 58)], fill=(230, 70, 80), outline=INK, w=2.5)
-    c.poly([(x, by + 44), (x + 26, by + 30), (x + 30, by + 58)], fill=(230, 70, 80), outline=INK, w=2.5)
-    c.circ(x, by + 44, 7, fill=(210, 50, 65), outline=INK, w=2)
+    # 胴体（白Tシャツ＋カーディガン）
+    card, card_dk = (238, 196, 120), (210, 165, 90)
+    c.rect(x - 62, by, x + 62, by + 92, fill=card, outline=INK, w=4, r=26)
+    c.poly([(x - 26, by + 2), (x + 26, by + 2), (x + 16, by + 92), (x - 16, by + 92)], fill=(255, 255, 255))
+    c.line([(x - 26, by + 4), (x - 16, by + 90)], card_dk, 3)
+    c.line([(x + 26, by + 4), (x + 16, by + 90)], card_dk, 3)
+    c.arc((x - 18, by - 6, x + 18, by + 14), 0, 180, INK, 2.5)  # Tシャツの襟
+    c.line([(x - 10, by + 10), (x, by + 30), (x + 10, by + 10)], (200, 160, 60), 1.5)  # ネックレス
+    coin(c, x, by + 34, 6, face=False)
+    for k in range(3):
+        c.circ(x - 34, by + 30 + k * 22, 3.5, fill=card_dk)
+    # トートバッグ（肩掛け）
+    c.line([(x + 40, by + 4), (x + 70, by + 70)], (120, 90, 70), 6)
     # 首・顔
     c.rect(x - 14, hy + 60, x + 14, by + 8, fill=SKIN_SH)
     c.ell(x - 82, hy - 88, x + 82, hy + 82, fill=SKIN, outline=INK, w=4)
@@ -502,89 +511,30 @@ def yui(c, tm, mood, idx):
     mouth(c, x, hy + 46, 1.0, v, mood)
 
 
-def owl(c, tm, pose, idx):
-    arrive = ST[1] - 1.0
-    k = ease((tm - arrive) / 0.9)
+CAT_X, CAT_FEET, CAT_H = 1100, 600, 520
+
+
+def cat_teacher(c, tm, idx, lt):
+    """ネコ先生（ユーザー提供のキャラクター画像を動かす）。"""
+    t0 = ST[1] - 1.05
+    k = (tm - t0) / 0.95
     if k <= 0:
         return
-    x = 1140 + (1 - k) ** 2 * 420
-    y = 250 - (1 - k) * 230 + math.sin(tm * 2.0) * 3
-    speaking = talking("owl", tm)
-    if speaking:
-        y += math.sin(tm * 8) * 2
-    flap = math.sin(tm * 26) * 40 * (1 - k)
-    br, br_dk, belly, face = (150, 100, 66), (115, 75, 48), (240, 215, 175), (238, 205, 160)
-    c.ell(x - 70, 318, x + 70, 332, fill=(0, 0, 0, 40))
-    # しっぽ
-    c.poly([(x - 30, y + 95), (x + 30, y + 95), (x, y + 130)], fill=br_dk, outline=INK, w=3)
-    # 左の翼
-    c.poly([(x - 66, y - 5), (x - 108 - flap / 2, y + 50 - flap), (x - 92, y + 92), (x - 52, y + 96)], fill=br_dk, outline=INK, w=3)
-    # 体
-    c.ell(x - 78, y - 85, x + 78, y + 112, fill=br, outline=INK, w=5)
-    c.ell(x - 52, y + 5, x + 52, y + 104, fill=belly)
-    for r in range(3):  # 胸のうろこ模様
-        for q in range(-2, 3):
-            px, py = x + q * 20 + (r % 2) * 10, y + 30 + r * 22
-            if abs(px - x) < 44 - r * 4:
-                c.arc((px - 9, py - 6, px + 9, py + 8), 20, 160, (200, 165, 120), 2.5)
-    # 顔のディスク
-    c.ell(x - 70, y - 64, x + 2, y + 12, fill=face)
-    c.ell(x - 2, y - 64, x + 70, y + 12, fill=face)
-    # 耳
-    c.poly([(x - 62, y - 55), (x - 74, y - 112), (x - 28, y - 74)], fill=br, outline=INK, w=3)
-    c.poly([(x + 62, y - 55), (x + 74, y - 112), (x + 28, y - 74)], fill=br, outline=INK, w=3)
-    # 目＋メガネ
-    blink = (tm % 4.1) < 0.12
-    for ex in (-33, 33):
-        ex_ = x + ex
-        c.circ(ex_, y - 26, 27, fill=(255, 255, 255))
-        if blink:
-            c.line([(ex_ - 15, y - 26), (ex_ + 15, y - 26)], INK, 4)
-        elif pose == "stop":
-            c.line([(ex_ - 14, y - 34 + (6 if ex < 0 else -6)), (ex_ + 14, y - 34 - (6 if ex < 0 else -6))], INK, 5)  # キリッ
-            c.circ(ex_, y - 22, 12, fill=(250, 190, 40)); c.circ(ex_, y - 22, 6, fill=INK)
-        else:
-            lx = -4 if idx in (1, 3, 5) else -2
-            c.circ(ex_ + lx, y - 24, 15, fill=(250, 190, 40))
-            c.circ(ex_ + lx, y - 24, 8, fill=INK)
-            c.circ(ex_ + lx - 5, y - 30, 4, fill=(255, 255, 255))
-        c.circ(ex_, y - 26, 29, outline=(70, 60, 60), w=4.5)
-        c.arc((ex_ - 22, y - 50, ex_ + 22, y - 6), 200, 250, (255, 255, 255, 200), 3)  # レンズの反射
-    c.line([(x - 5, y - 28), (x + 5, y - 28)], (70, 60, 60), 4.5)
-    # 眉毛の羽
-    c.line([(x - 58, y - 62), (x - 14, y - 52)], br_dk, 7)
-    c.line([(x + 14, y - 52), (x + 58, y - 62)], br_dk, 7)
-    # くちばし（母音で開閉）
-    v = mouth_of("owl", tm)
-    open_ = {"a": 14, "o": 11, "e": 9, "u": 6, "i": 5}.get(v, 0)
-    c.poly([(x - 12, y + 2), (x + 12, y + 2), (x, y + 18)], fill=(250, 180, 50), outline=INK, w=2.5)
-    if open_:
-        c.poly([(x - 10, y + 16), (x + 10, y + 16), (x, y + 18 + open_)], fill=(220, 140, 30), outline=INK, w=2.5)
-        c.rect(x - 9, y + 13, x + 9, y + 17, fill=(150, 50, 60))
-    # 右の翼（ジェスチャー）
-    if pose == "stop":
-        c.poly([(x + 62, y + 10), (x + 70, y - 70), (x + 100, y - 110), (x + 118, y - 95), (x + 105, y - 60), (x + 82, y + 50)],
-               fill=br_dk, outline=INK, w=3)
-        for f in range(3):
-            c.line([(x + 82 + f * 8, y - 70 + f * 5), (x + 104 + f * 8, y - 100 + f * 6)], INK, 2.5)
-    elif pose == "point":  # ボードを指す
-        wob = math.sin(tm * 4) * 5
-        c.poly([(x - 50, y + 5), (x - 120, y - 20 + wob), (x - 150, y - 34 + wob), (x - 128, y - 4 + wob), (x - 60, y + 50)],
-               fill=br_dk, outline=INK, w=3)
-        c.poly([(x + 66, y - 5), (x + 104 + flap / 2, y + 50 - flap), (x + 90, y + 92), (x + 52, y + 96)], fill=br_dk, outline=INK, w=3)
-    else:
-        c.poly([(x + 66, y - 5), (x + 108 + flap / 2, y + 50 - flap), (x + 92, y + 92), (x + 52, y + 96)], fill=br_dk, outline=INK, w=3)
-    # 博士帽
-    tas = math.sin(tm * 2.6) * 8
-    c.poly([(x - 62, y - 92), (x, y - 120), (x + 62, y - 92), (x, y - 66)], fill=(45, 45, 65), outline=INK, w=3)
-    c.rect(x - 30, y - 92, x + 30, y - 72, fill=(45, 45, 65))
-    c.circ(x, y - 93, 5, fill=(240, 200, 60))
-    c.line([(x, y - 93), (x + 46, y - 82), (x + 48 + tas, y - 48)], (240, 200, 60), 3.5)
-    c.ell(x + 42 + tas, y - 52, x + 56 + tas, y - 36, fill=(240, 200, 60))
-    # 足
-    for fx in (-22, 22):
-        for t_ in (-8, 0, 8):
-            c.line([(x + fx, y + 108), (x + fx + t_, y + 120)], (245, 175, 50), 5)
+    walk = k < 1
+    x = CAT_X + (1 - ease(k)) * 420
+    bob = -abs(math.sin(tm * 11)) * 9 if walk else math.sin(tm * 1.9) * 1.5
+    speaking = talking("cat", tm)
+    stop = idx == 5 and lt < 1.25
+    explaining = idx in (1, 3, 5) and not stop
+    nod = math.sin(tm * 6.5) * 1.6 if speaking else math.sin(tm * 0.9) * 0.6
+    lean = (1.4 if explaining else 0) + (math.sin(tm * 11) * 1.5 if walk else 0)
+    glint = max(0.0, 1 - abs(lt - 0.25) / 0.25) if stop else 0
+    blink = ((tm % 3.9) < 0.12 or (tm % 9.1) < 0.12) and not stop
+    cat.draw(c, c.z * K, x, CAT_FEET, CAT_H, tm, bob=bob, vowel=mouth_of("cat", tm), blink=blink,
+             glint=glint, stern=stop, nod=nod, lean=lean)
+    if stop and lt < 0.6:  # メガネのキラーン
+        for i, (dx, dy) in enumerate(((-30, -400), (22, -404))):
+            sparkle(c, x + dx * CAT_H / 470 + 18, CAT_FEET + dy * CAT_H / 470 - 6, 16 * (1 - lt / 0.6) + 2, (255, 255, 255))
 
 
 # ---------- ホワイトボード ----------
@@ -613,20 +563,35 @@ def pill(c, x, y, s, size, fill=(255, 236, 140), ink=INK, k=1.0):
         c.text(x, y, s, int(size * min(1, sc)), fill=ink)
 
 
-def panel_piggy(c, lt):
-    board(c, "お年玉 1万円", (240, 120, 150))
+def bank(c, x, y, s=1.0):
+    c.ell(x - 120 * s, y + 92 * s, x + 120 * s, y + 108 * s, fill=(0, 0, 0, 35))
+    c.poly([(x - 120 * s, y - 40 * s), (x, y - 100 * s), (x + 120 * s, y - 40 * s)], fill=(120, 150, 200), outline=INK, w=4)
+    c.text(x, y - 58 * s, "BANK", int(24 * s), fill=(255, 255, 255))
+    c.rect(x - 110 * s, y - 40 * s, x + 110 * s, y - 24 * s, fill=(225, 230, 240), outline=INK, w=3)
+    for i in range(4):
+        px = x - 80 * s + i * 53 * s
+        c.rect(px - 10 * s, y - 24 * s, px + 10 * s, y + 80 * s, fill=(245, 245, 250), outline=INK, w=3)
+    c.rect(x - 22 * s, y + 20 * s, x + 22 * s, y + 80 * s, fill=(90, 110, 150), outline=INK, w=3, r=6 * s)
+    c.rect(x - 125 * s, y + 80 * s, x + 125 * s, y + 98 * s, fill=(210, 215, 228), outline=INK, w=3)
+
+
+def panel_bank(c, lt):
+    board(c, "バイト代 10万円 → 銀行へ", (240, 120, 150))
+    bank(c, BCX + 120, 280, 1.0)
     drop = ease((lt - 0.3) / 1.0)
     landed = lt > 1.3
-    wob = math.sin((lt - 1.3) * 25) * 5 * math.exp(-(lt - 1.3) * 4) if landed else 0
-    piggy(c, BCX, 300, 1.25, wob)
     if not landed:
-        bill(c, BCX - 10, 140 + drop * 110, 0.55 * (1 - drop * 0.75))
+        for j in range(3):
+            bill(c, lerp(BCX - 150, BCX + 120, drop) - j * 8, lerp(220, 300, drop) - j * 8, 0.5 * (1 - drop * 0.7))
     else:
         for i in range(3):
             a = (lt - 1.3) * 2
             if a < 1:
-                sparkle(c, BCX - 60 + i * 60, 180 - a * 40 - i * 8, 10 * (1 - a) + 3)
-        c.text(BCX, 155, "ちょきん！", 28, fill=(230, 90, 130), stroke=3)
+                sparkle(c, BCX + 60 + i * 60, 190 - a * 40 - i * 8, 10 * (1 - a) + 3)
+        c.text(BCX - 150, 230, "預金", 34, fill=(230, 90, 130), stroke=3)
+        c.text(BCX - 150, 280, "100,000円", 26, fill=INK)
+    if lt > 3.0:
+        c.text(BCX - 150, 335, "金利は とても低い…", 20, fill=(150, 150, 150))
 
 
 def panel_inflation(c, lt, dur):
@@ -637,10 +602,11 @@ def panel_inflation(c, lt, dur):
     # 左：お札の価値
     val = 1 / 1.02 ** years
     s = 0.62 * math.sqrt(val) + 0.12
-    bill(c, 510, 230, s, fade=1 - val)
+    for j in (2, 1, 0):
+        bill(c, 510 - j * 6 * s, 230 - j * 6 * s, s, fade=1 - val)
     c.rect(430, 290, 590, 306, fill=(230, 230, 230), r=8)
     c.rect(430, 290, 430 + 160 * val, 306, fill=(90, 170, 110), r=8)
-    c.text(510, 330, f"1万円の価値 {int(10000 * val):,}円分", 19, fill=(70, 120, 80))
+    c.text(510, 330, f"10万円の価値 {int(100000 * val):,}円分", 19, fill=(70, 120, 80))
     # 右：アイスの値段
     ix, iy = 810, 215
     c.poly([(ix - 30, iy + 5), (ix + 30, iy + 5), (ix, iy + 85)], fill=(230, 180, 110), outline=INK, w=3)
@@ -659,16 +625,16 @@ def panel_compound(c, lt, dur):
     board(c, "複利でふえると…", (70, 170, 110))
     k = ease((lt - 0.5) / (dur - 3.2))
     years = 14.4 * k
-    val = 10000 * 1.05 ** years
+    val = 100000 * 1.05 ** years
     c.text(BCX, 132, f"年利5% … {int(years)}年後  {int(val):,}円", 28, fill=(40, 120, 70))
     ox, oy, gw, gh = 430, 380, 480, 200
     c.line([(ox, oy), (ox + gw, oy)], INK, 3)
     c.line([(ox, oy), (ox, oy - gh - 10)], INK, 3)
-    for v, lab in ((1, "1万"), (2, "2万")):
+    for v, lab in ((1, "10万"), (2, "20万")):
         yy = oy - gh * (v / 2)
         for xx in range(ox, ox + gw, 18):
             c.line([(xx, yy), (xx + 8, yy)], (200, 200, 200), 2)
-        c.text(ox - 30, yy, lab, 18, fill=(130, 130, 130))
+        c.text(ox - 34, yy, lab, 17, fill=(130, 130, 130))
     n = 15
     bw = gw / n
     for i in range(n):
@@ -684,18 +650,23 @@ def panel_compound(c, lt, dur):
     for j, (lab, col) in enumerate((("元本", (175, 220, 185)), ("増えた分", (60, 170, 100)))):
         c.rect(ox + 20 + j * 90, 168, ox + 36 + j * 90, 184, fill=col, r=3)
         c.text(ox + 42 + j * 90, 176, lab, 16, fill=(90, 90, 90), anchor="lm")
-    pill(c, 760, 205, "72 ÷ 5 ＝ 約14年で 2倍！", 24, fill=(200, 235, 255), k=ease((lt - 3.0) / 0.4))
+    pill(c, 575, 198, "72 ÷ 5 ＝ 約14年で 2倍！", 24, fill=(200, 235, 255), k=ease((lt - 3.0) / 0.4))
+    pill(c, 575, 246, "利息にも 利息がつく！", 20, fill=(255, 236, 140), k=ease((lt - 5.6) / 0.4))
 
 
 def panel_rules(c, lt):
     board(c, "投資のコツ", (90, 130, 220))
-    items = [("少しずつ", (90, 160, 230)), ("長く", (90, 185, 120)), ("分散", (240, 150, 60))]
+    k0 = ease((lt - 2.3) / 0.3)
+    if k0 > 0:
+        c.rect(BCX - 150, 112, BCX + 150, 142, fill=(255, 240, 240), outline=(220, 90, 90), w=2.5, r=15)
+        c.text(BCX, 127, "まずは 生活費を残す", 18, fill=(200, 60, 60))
+    items = [("少額から", (90, 160, 230)), ("長く", (90, 185, 120)), ("分散", (240, 150, 60))]
     for i, (s, col) in enumerate(items):
-        k = back((lt - 1.7 - i * 0.8) / 0.35) if lt > 1.7 + i * 0.8 else 0
+        k = back((lt - 3.3 - i * 0.6) / 0.35) if lt > 3.3 + i * 0.6 else 0
         if k <= 0:
             continue
-        cx, cy = 500 + i * 160, 200
-        w, h = 66 * k, 80 * k
+        cx, cy = 500 + i * 160, 215
+        w, h = 66 * k, 72 * k
         c.rect(cx - w, cy - h, cx + w, cy + h, fill=(255, 255, 255), outline=col, w=5, r=16)
         if k > 0.7:
             if i == 0:  # 階段状のコイン
@@ -711,14 +682,14 @@ def panel_rules(c, lt):
                 c.rect(cx - 42, cy - 2, cx + 42, cy + 28, fill=(200, 150, 90), outline=INK, w=3, r=8)
                 for j, ec in enumerate([(255, 120, 120), (120, 180, 255), (255, 220, 100)]):
                     c.ell(cx - 34 + j * 24, cy - 26, cx - 14 + j * 24, cy + 2, fill=ec, outline=INK, w=2)
-            c.text(cx, cy + 56, s, 26, fill=col)
-    k = (lt - 5.1) / 0.45
+            c.text(cx, cy + 50, s, 24, fill=col)
+    k = (lt - 5.9) / 0.45
     if k > 0:
         sc = back(k)
         r = 8 * math.sin(min(1, k) * math.pi) * (1 - min(1, k))
-        c.rect(BCX - 190 * sc, 340 - 32 * sc + r, BCX + 190 * sc, 340 + 32 * sc + r, fill=(255, 225, 90), outline=(200, 60, 60), w=4, r=12)
+        c.rect(BCX - 200 * sc, 340 - 32 * sc + r, BCX + 200 * sc, 340 + 32 * sc + r, fill=(255, 225, 90), outline=(200, 60, 60), w=4, r=12)
         if sc > 0.6:
-            c.text(BCX, 340 + r, "NISA ＝ 利益が非課税！", 28, fill=(200, 50, 50))
+            c.text(BCX, 340 + r, "新NISA ＝ 利益が非課税！", 28, fill=(200, 50, 50))
 
 
 def panel_tree(c, lt):
@@ -754,7 +725,7 @@ def subtitle(c, idx, tm):
     ln = LINES[idx]
     if tm < ln["start"] - 0.1 or tm > ln["start"] + ln["dur"] + 0.25:
         return
-    name, col = ("ユイ", (240, 100, 110)) if ln["who"] == "yui" else ("フクロウ先生", (150, 100, 66))
+    name, col = ("ユイ", (240, 100, 110)) if ln["who"] == "yui" else ("ネコ先生", (90, 110, 160))
     d = c.d
     d.rounded_rectangle((70 * K, 598 * K, 1210 * K, 704 * K), radius=int(22 * K), fill=(255, 255, 255, 236), outline=INK, width=int(4 * K))
     nw = 34 + 25 * len(name)
@@ -787,8 +758,8 @@ def title_card(c, tm):
     d = c.d
     d.rounded_rectangle((230 * K, (y - 125) * K, 1050 * K, (y + 125) * K), radius=int(36 * K), fill=(255, 214, 90), outline=INK, width=int(6 * K))
     d.rounded_rectangle((246 * K, (y - 109) * K, 1034 * K, (y + 109) * K), radius=int(28 * K), outline=(255, 255, 255), width=int(3 * K))
-    c.stext(640, y - 35, "ユイと フクロウ先生", 70, INK, stroke=6, sfill=(255, 255, 255))
-    c.stext(640, y + 58, "〜 お金と 72の法則 〜", 40, (200, 70, 50))
+    c.stext(640, y - 35, "ユイと ネコ先生", 76, INK, stroke=6, sfill=(255, 255, 255))
+    c.stext(640, y + 58, "〜 大学生のための お金と72の法則 〜", 38, (200, 70, 50))
 
 
 def ending(c, lt):
@@ -815,9 +786,9 @@ def ending(c, lt):
     cd.rounded_rectangle((180 * K, 200 * K, 1100 * K, 330 * K), radius=int(24 * K), fill=(255, 255, 255, 30), outline=(255, 214, 90), width=int(3 * K))
     cc.stext(640, 265, "72 ÷ 年利(%) ＝ お金が2倍になる年数(約)", 44, (255, 255, 255))
     cc.stext(640, 390, "72 ÷ インフレ率(%) ＝ お金の価値が半分になる年数(約)", 28, (200, 220, 255))
-    cc.stext(640, 450, "少しずつ・長く・分散して ／ NISAなら利益が非課税", 28, (200, 255, 210))
+    cc.stext(640, 450, "生活費は残して、少額から・長く・分散 ／ 新NISAなら利益が非課税", 28, (200, 255, 210))
     cc.stext(640, 545, "※投資には元本割れのリスクがあります。数値は概算です。", 22, (255, 180, 180))
-    cc.stext(1240, 700, "VOICEVOX:春日部つむぎ / VOICEVOX:ちび式じい", 17, (200, 200, 220), anchor="rm")
+    cc.stext(1240, 700, "VOICEVOX:春日部つむぎ / VOICEVOX:青山龍星", 17, (200, 200, 220), anchor="rm")
     for i in range(5):
         x, y = 360 + i * 140, 625 + math.sin(lt * 4 + i) * 8
         cd.ellipse(((x - 24) * K, (y - 24) * K, (x + 24) * K, (y + 24) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
@@ -839,7 +810,7 @@ def frame(n):
     # ボード
     dur = LINES[idx]["dur"] if 0 <= idx < len(LINES) else 1
     if idx <= 0:
-        panel_piggy(c, max(0, tm - ST[0]))
+        panel_bank(c, max(0, tm - ST[0]))
     elif idx == 1:
         panel_inflation(c, lt, dur)
     elif idx in (2, 3):
@@ -856,19 +827,13 @@ def frame(n):
     if idx == 5 and lt < 1.25:
         effect_bg(c, tm, "impact", 1 - ease((lt - 0.9) / 0.35))
     mood = {2: "shock", 4: "excited", 6: "happy"}.get(idx, "normal")
-    if idx == 5 and lt < 1.25:
-        pose = "stop"
-    elif talking("owl", tm) and idx in (1, 3, 5):
-        pose = "point"
-    else:
-        pose = "idle"
-    owl(c, tm, pose, idx)
+    cat_teacher(c, tm, idx, lt)
     yui(c, tm, mood, idx)
     # 画面上の文字エフェクト
-    if idx == 2 and lt > -0.1:
+    if idx == 2 and lt > -0.07:
         k = back((lt + 0.1) / 0.3)
         c.stext(1010 + math.sin(tm * 30) * 3, 190, "ガーン！", int(100 * k) + 1, (255, 255, 255), stroke=8, sfill=(40, 50, 100))
-    if idx == 4 and lt > -0.1:
+    if idx == 4 and lt > -0.07:
         k = back((lt + 0.1) / 0.3)
         c.stext(1020, 200, "ぜんぶ\n投資！？", int(76 * k) + 1, (230, 80, 40), stroke=8, sfill=(255, 255, 255))
         for i in range(5):
@@ -876,9 +841,9 @@ def frame(n):
             x, y = 1020 + math.cos(a) * 170, 330 + math.sin(a) * 150
             c.d.ellipse(((x - 26) * K, (y - 26) * K, (x + 26) * K, (y + 26) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
             c.stext(x, y, "¥", 28, (185, 120, 15))
-    if idx == 5 and 0 <= lt < 1.25:
+    if idx == 5 and 0.03 <= lt < 1.25:
         k = back(lt / 0.25)
-        c.stext(330, 200, "待った！", int(130 * k) + 1, (255, 255, 255), stroke=10, sfill=(180, 30, 40))
+        c.stext(300, 230, "待ち\nたまえ！", int(110 * k) + 1, (255, 255, 255), stroke=10, sfill=(180, 30, 40))
     subtitle(c, idx, tm)
     title_card(c, tm)
     if idx == len(LINES):
