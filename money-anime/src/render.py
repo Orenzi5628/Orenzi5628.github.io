@@ -3,7 +3,7 @@
 - 音声: tts.py が VOICEVOX で作った line*.wav と visemes.json（母音タイミング）
 - 絵: Pillow で 1 コマずつ描画（カメラのズーム・カット、口パク、エフェクト）
 - 音: sound.py で合成した BGM と効果音をミックス
-- 出力: ffmpeg で ../money-72.mp4（1920x1080 / 30fps）
+- 出力: ffmpeg で ../money-72-shorts.mp4（1080x1920 縦 / 30fps）
 
 使い方: python3 render.py            # 本番
         python3 render.py 3 12.5    # その秒数のコマを preview_*.png に保存
@@ -24,10 +24,11 @@ import cat
 import sound
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "money-72.mp4")
-OW, OH = 1920, 1080          # 出力解像度
+OUT = os.path.join(HERE, "..", "money-72-shorts.mp4")
+OW, OH = 1080, 1920          # 出力解像度（ショート動画用の縦 9:16）
+VW, VH = 720, 1280           # 設計座標の画面サイズ
 SS = 2                       # スーパーサンプリング
-K = OW / 1280 * SS           # 設計座標(1280x720) → 描画ピクセル
+K = OW / VW * SS             # 設計座標 → 描画ピクセル
 FPS = 30
 SR = 44100
 
@@ -93,6 +94,29 @@ def mouth_of(who, tm):
     return None
 
 
+OPEN = {"a": 1.0, "o": 0.85, "e": 0.7, "u": 0.5, "i": 0.45, "n": 0.12}
+
+
+def mouth_level(who, tm):
+    """口の開き具合 (0..1) をなめらかに返す。母音ごとの山を重ねてから、少しぼかす。"""
+    for ln in LINES:
+        if ln["who"] == who and ln["start"] - 0.1 <= tm < ln["start"] + ln["dur"] + 0.1:
+            def at(lt):
+                best, shape = 0.0, None
+                for a, b, raw in ln["vis"]:
+                    v = raw.lower()
+                    peak = OPEN.get(v, 0.0) * (0.3 if raw in "AIUEO" else 1.0)  # 大文字は無声化した母音
+                    mid, half = (a + b) / 2, (b - a) / 2 + 0.05
+                    k = 1 - abs(lt - mid) / half
+                    if k > 0 and peak * math.sin(k * math.pi / 2) > best:
+                        best, shape = peak * math.sin(k * math.pi / 2), v
+                return best, shape
+            lt = tm - ln["start"]
+            vals = [at(lt + d)[0] for d in (-0.033, -0.016, 0, 0.016, 0.033)]
+            return sum(vals) / len(vals), at(lt)[1]
+    return 0.0, None
+
+
 def talking(who, tm):
     return any(ln["who"] == who and ln["start"] <= tm < ln["start"] + ln["dur"] for ln in LINES)
 
@@ -117,16 +141,18 @@ def mix(c1, c2, k):
 
 
 # ---------- カメラ ----------
-WIDE = (640, 360, 1.0)
-BOARD_CAM = (672, 300, 1.12)
+WIDE = (360, 640, 1.0)
+BOARD_CAM = (360, 575, 1.07)
+YUI_CLOSE = (195, 760, 1.75)
+CAT_CLOSE = (565, 680, 1.62)
 CAMS = {  # 場面ごとの (中心x, 中心y, ズーム, 切り替え方)
     -1: (WIDE, "cut"),
-    0: ((560, 345, 1.12), "ease"),
+    0: ((360, 610, 1.03), "ease"),
     1: (BOARD_CAM, "ease"),
-    2: ((330, 330, 2.05), "cut"),
+    2: (YUI_CLOSE, "cut"),
     3: (BOARD_CAM, "cut"),
-    4: ((330, 330, 2.05), "cut"),
-    5: ((1100, 235, 1.8), "cut"),
+    4: (YUI_CLOSE, "cut"),
+    5: (CAT_CLOSE, "cut"),
     6: (WIDE, "ease"),
     7: (WIDE, "cut"),
 }
@@ -153,24 +179,38 @@ def camera(tm, idx, lt):
 
 class Canvas:
     def __init__(self, cam, shake=(0, 0)):
-        self.img = Image.new("RGB", (int(1280 * K), int(720 * K)))
+        self.img = Image.new("RGB", (int(VW * K), int(VH * K)))
         self.d = ImageDraw.Draw(self.img, "RGBA")
         self.cx, self.cy, self.z = cam
         self.sx, self.sy = shake
+        self.tx, self.ty, self.ts = 0.0, 0.0, 1.0   # 部品を置くための平行移動・拡大
+
+    def at(self, dx, dy, sc=1.0):
+        """with c.at(dx, dy): の中では、元の座標で描いた部品が (dx, dy) ずれて置かれる。"""
+        canvas = self
+
+        class _Ctx:
+            def __enter__(self_):
+                self_.prev = (canvas.tx, canvas.ty, canvas.ts)
+                canvas.tx, canvas.ty, canvas.ts = dx, dy, sc
+
+            def __exit__(self_, *a):
+                canvas.tx, canvas.ty, canvas.ts = self_.prev
+        return _Ctx()
 
     # 世界座標 → ピクセル
     def P(self, *v):
         out = []
         for i in range(0, len(v), 2):
-            out.append(((v[i] - self.cx) * self.z + 640 + self.sx) * K)
-            out.append(((v[i + 1] - self.cy) * self.z + 360 + self.sy) * K)
+            out.append(((v[i] * self.ts + self.tx - self.cx) * self.z + VW / 2 + self.sx) * K)
+            out.append(((v[i + 1] * self.ts + self.ty - self.cy) * self.z + VH / 2 + self.sy) * K)
         return out
 
     def L(self, n):
-        return max(1, int(round(n * self.z * K)))
+        return max(1, int(round(n * self.ts * self.z * K)))
 
     def font(self, size, world=True):
-        return _font(int(size * (self.z if world else 1) * K))
+        return _font(int(size * (self.z * self.ts if world else 1) * K))
 
     # 図形（世界座標）
     def ell(self, x0, y0, x1, y1, fill=None, outline=None, w=0):
@@ -230,87 +270,87 @@ SKIN_SH = (245, 200, 180)
 
 # ---------- 背景 ----------
 def room(c, tm, idx):
+    """縦画面用の部屋。床は y=1010。"""
     sun = ease((tm - ST[6] + 0.3) / 2.5) if idx >= 6 else 0
     wall_top, wall_bot = mix((255, 246, 228), (255, 232, 205), sun), mix((250, 230, 200), (255, 214, 175), sun)
-    for i in range(12):  # 壁のグラデーション
-        y0 = -200 + i * 70
-        c.rect(-400, y0, 1700, y0 + 72, fill=mix(wall_top, wall_bot, i / 11))
-    for y in range(0, 560, 56):  # 壁紙の柄
-        for x in range(-280 + (y // 56 % 2) * 28, 1600, 56):
+    for i in range(16):
+        y0 = -300 + i * 85
+        c.rect(-500, y0, 1300, y0 + 87, fill=mix(wall_top, wall_bot, i / 15))
+    for y in range(0, 1000, 56):
+        for x in range(-480 + (y // 56 % 2) * 28, 1300, 56):
             c.circ(x, y + 20, 3.5, fill=(240, 212, 178, 150))
-    c.rect(-400, 520, 1700, 532, fill=(225, 190, 150))  # 腰板
-    # 窓
+    c.rect(-500, 960, 1300, 972, fill=(225, 190, 150))  # 腰板
+    # 窓（ふたりの間）
+    wx0, wy0, wx1, wy1 = 285, 560, 445, 760
     sky1 = mix((150, 205, 245), (255, 170, 120), sun)
     sky2 = mix((205, 235, 255), (255, 225, 160), sun)
-    c.rect(60, 50, 310, 270, fill=(255, 255, 255), outline=INK, w=4, r=10)
+    c.rect(wx0, wy0, wx1, wy1, fill=(255, 255, 255), outline=INK, w=4, r=10)
     for i in range(8):
-        c.rect(72, 62 + i * 25.5, 298, 62 + (i + 1) * 25.5 + 1, fill=mix(sky1, sky2, i / 7))
+        c.rect(wx0 + 10, wy0 + 10 + i * 22.5, wx1 - 10, wy0 + 10 + (i + 1) * 22.5 + 1, fill=mix(sky1, sky2, i / 7))
     if sun > 0:
-        sy = 268 - 120 * sun
-        c.circ(185, sy, 58, fill=(255, 210, 120, 120))
-        c.circ(185, sy, 38, fill=(255, 150, 70))
+        sy = wy1 - 10 - 110 * sun
+        c.circ(365, sy, 50, fill=(255, 210, 120, 120))
+        c.circ(365, sy, 32, fill=(255, 150, 70))
     else:
-        for k, (x, y) in enumerate([(120, 110), (240, 150)]):  # 流れる雲
-            x = 72 + (x - 72 + tm * 6) % 230
-            c.circ(x, y, 14, fill=(255, 255, 255)); c.circ(x + 16, y - 6, 16, fill=(255, 255, 255)); c.circ(x + 32, y, 13, fill=(255, 255, 255))
-    c.rect(60, 50, 310, 270, outline=INK, w=5, r=10)
-    c.line([(185, 52), (185, 268)], INK, 4)
-    c.line([(62, 160), (308, 160)], INK, 4)
-    c.rect(48, 268, 322, 284, fill=(200, 150, 110), outline=INK, w=3, r=4)
+        for k, (x, y) in enumerate([(300, 610), (360, 680)]):
+            x = wx0 + 10 + (x - wx0 - 10 + tm * 6) % 140
+            c.circ(x, y, 11, fill=(255, 255, 255)); c.circ(x + 12, y - 5, 13, fill=(255, 255, 255)); c.circ(x + 25, y, 10, fill=(255, 255, 255))
+    c.rect(wx0, wy0, wx1, wy1, outline=INK, w=5, r=10)
+    c.line([(365, wy0 + 2), (365, wy1 - 2)], INK, 4)
+    c.line([(wx0 + 2, 660), (wx1 - 2, 660)], INK, 4)
+    c.rect(wx0 - 10, wy1 - 2, wx1 + 10, wy1 + 12, fill=(200, 150, 110), outline=INK, w=3, r=4)
+    # 本棚（ネコ先生の後ろ）
+    c.rect(560, 700, 780, 1010, fill=(165, 110, 72), outline=INK, w=4, r=4)
+    cols = [(232, 96, 96), (96, 150, 225), (245, 205, 85), (112, 192, 122), (198, 122, 200), (255, 150, 90)]
+    for j, shelf in enumerate((800, 900)):
+        for i, col in enumerate(cols):
+            h = 60 + ((i + j) * 13) % 20
+            c.rect(574 + i * 30, shelf - h, 598 + i * 30, shelf, fill=col, outline=INK, w=2, r=3)
+        c.rect(560, shelf, 780, shelf + 10, fill=(130, 85, 55))
+    c.rect(560, 700, 780, 712, fill=(130, 85, 55))
     # 観葉植物
-    c.rect(-10, 470, 60, 560, fill=(230, 140, 90), outline=INK, w=3, r=8)
+    c.rect(-20, 900, 40, 1000, fill=(230, 140, 90), outline=INK, w=3, r=8)
     for a in range(-60, 61, 30):
         r = math.radians(a - 90 + 4 * math.sin(tm * 1.3 + a))
-        c.line([(25, 475), (25 + math.cos(r) * 90, 475 + math.sin(r) * 100)], (90, 170, 100), 14)
+        c.line([(10, 905), (10 + math.cos(r) * 80, 905 + math.sin(r) * 95)], (90, 170, 100), 13)
     # 床
-    c.rect(-400, 560, 1700, 900, fill=(206, 160, 115))
-    for x in range(-400, 1700, 110):
-        c.line([(x, 560), (x - 60, 900)], (190, 144, 100), 3)
-    c.rect(-400, 556, 1700, 566, fill=(170, 120, 80))
-    # ラグ
-    c.ell(60, 590, 560, 690, fill=(255, 190, 170, 200))
-    c.ell(100, 600, 520, 680, outline=(255, 255, 255, 160), w=3)
-    # 本棚
-    c.rect(1030, 320, 1250, 560, fill=(165, 110, 72), outline=INK, w=4, r=4)
-    cols = [(232, 96, 96), (96, 150, 225), (245, 205, 85), (112, 192, 122), (198, 122, 200), (255, 150, 90)]
-    for i, col in enumerate(cols):
-        h = 70 + (i * 13) % 20
-        c.rect(1046 + i * 32, 432 - h, 1072 + i * 32, 432, fill=col, outline=INK, w=2, r=3)
-    c.rect(1030, 432, 1250, 444, fill=(130, 85, 55))
-    for i in range(3):
-        c.circ(1070 + i * 60, 500, 22, fill=(250, 200, 60), outline=(170, 120, 20), w=3)  # 貯金の壺っぽいコイン
-    c.rect(1030, 320, 1250, 332, fill=(130, 85, 55))
+    c.rect(-500, 1000, 1300, 1700, fill=(206, 160, 115))
+    for x in range(-500, 1300, 110):
+        c.line([(x, 1000), (x - 80, 1700)], (190, 144, 100), 3)
+    c.rect(-500, 996, 1300, 1006, fill=(170, 120, 80))
+    c.ell(20, 1030, 400, 1120, fill=(255, 190, 170, 200))
+    c.ell(50, 1042, 370, 1108, outline=(255, 255, 255, 160), w=3)
 
 
 def effect_bg(c, tm, kind, k=1.0):
     """漫画的な効果背景（画面全体）。"""
-    W, H = 1280 * K, 720 * K
+    W, H = VW * K, VH * K
     if kind == "gloom":
         c.d.rectangle((0, 0, W, H), fill=(60, 80, 140, int(235 * k)))
         rng = np.random.default_rng(3)
-        for i in range(46):
-            x = rng.uniform(0, 1280)
-            ln = rng.uniform(200, 560)
+        for i in range(40):
+            x = rng.uniform(0, VW)
+            ln = rng.uniform(300, 900)
             c.d.line((x * K, 0, x * K, ln * K * k), fill=(140, 160, 210, 200), width=int(rng.uniform(2, 6) * K))
     elif kind == "burst":
         cols = [(255, 214, 80), (255, 236, 150)]
-        cx, cy = 640 * K, 330 * K
+        cx, cy = 360 * K, 620 * K
         n = 28
         rot = tm * 0.6
         for i in range(n):
             a0 = rot + i * 2 * math.pi / n
             a1 = a0 + math.pi / n
-            R = 2000 * K
+            R = 2500 * K
             c.d.polygon([(cx, cy), (cx + math.cos(a0) * R, cy + math.sin(a0) * R), (cx + math.cos(a1) * R, cy + math.sin(a1) * R)],
                         fill=cols[i % 2] + (int(255 * k),))
     elif kind == "impact":
         c.d.rectangle((0, 0, W, H), fill=(255, 90, 80, int(220 * k)))
-        cx, cy = 900 * K, 300 * K
+        cx, cy = 360 * K, 450 * K
         rng = np.random.default_rng(5)
         for i in range(60):
             a = rng.uniform(0, 2 * math.pi)
-            r0 = rng.uniform(200, 400) * K
-            c.d.line((cx + math.cos(a) * r0, cy + math.sin(a) * r0, cx + math.cos(a) * 2000 * K, cy + math.sin(a) * 2000 * K),
+            r0 = rng.uniform(260, 420) * K
+            c.d.line((cx + math.cos(a) * r0, cy + math.sin(a) * r0, cx + math.cos(a) * 2500 * K, cy + math.sin(a) * 2500 * K),
                      fill=(255, 255, 255, 170), width=int(rng.uniform(2, 8) * K))
 
 
@@ -511,7 +551,7 @@ def yui(c, tm, mood, idx):
     mouth(c, x, hy + 46, 1.0, v, mood)
 
 
-CAT_X, CAT_FEET, CAT_H = 1100, 600, 520
+CAT_X, CAT_FEET, CAT_H = 585, 1010, 530
 
 
 def cat_teacher(c, tm, idx, lt):
@@ -530,7 +570,7 @@ def cat_teacher(c, tm, idx, lt):
     lean = (1.4 if explaining else 0) + (math.sin(tm * 11) * 1.5 if walk else 0)
     glint = max(0.0, 1 - abs(lt - 0.25) / 0.25) if stop else 0
     blink = ((tm % 3.9) < 0.12 or (tm % 9.1) < 0.12) and not stop
-    cat.draw(c, c.z * K, x, CAT_FEET, CAT_H, tm, bob=bob, vowel=mouth_of("cat", tm), blink=blink,
+    cat.draw(c, c.z * K, x, CAT_FEET, CAT_H, tm, bob=bob, mouth=mouth_level("cat", tm), blink=blink,
              glint=glint, stern=stop, nod=nod, lean=lean)
     if stop and lt < 0.6:  # メガネのキラーン
         for i, (dx, dy) in enumerate(((-30, -400), (22, -404))):
@@ -538,6 +578,11 @@ def cat_teacher(c, tm, idx, lt):
 
 
 # ---------- ホワイトボード ----------
+# パネルは横長版の座標 (360..960, 40..410) で描き、縦画面ではこのぶんずらして置く
+BOARD_AT = (-300, 95)
+YUI_SC = 1.12
+YUI_AT = (185 - 235 * YUI_SC, 1010 - 600 * YUI_SC, YUI_SC)   # 足元が (185, 1010) に来るように
+YUI_X = 185
 BX0, BY0, BX1, BY1 = 360, 40, 960, 410
 BCX = (BX0 + BX1) / 2
 
@@ -719,6 +764,30 @@ def panel_tree(c, lt):
 
 
 # ---------- 画面の重ね要素 ----------
+def wrap(txt, n):
+    """句読点で区切りながら、1行 n 文字以内に折り返す。"""
+    parts, cur = [], ""
+    for ch in txt:
+        cur += ch
+        if ch in "、。！？":
+            parts.append(cur); cur = ""
+    if cur:
+        parts.append(cur)
+    lines, line = [], ""
+    for p in parts:
+        while len(p) > n:
+            if line:
+                lines.append(line); line = ""
+            lines.append(p[:n]); p = p[n:]
+        if len(line) + len(p) > n:
+            lines.append(line); line = p
+        else:
+            line += p
+    if line:
+        lines.append(line)
+    return lines
+
+
 def subtitle(c, idx, tm):
     if not (0 <= idx < len(LINES)):
         return
@@ -726,73 +795,83 @@ def subtitle(c, idx, tm):
     if tm < ln["start"] - 0.1 or tm > ln["start"] + ln["dur"] + 0.25:
         return
     name, col = ("ユイ", (240, 100, 110)) if ln["who"] == "yui" else ("ネコ先生", (90, 110, 160))
+    lines = wrap(ln["text"], 18)
+    size, lh = 32, 46
+    h = len(lines) * lh + 34
+    cy = 1050
+    y0, y1 = cy - h / 2, cy + h / 2
     d = c.d
-    d.rounded_rectangle((70 * K, 598 * K, 1210 * K, 704 * K), radius=int(22 * K), fill=(255, 255, 255, 236), outline=INK, width=int(4 * K))
-    nw = 34 + 25 * len(name)
-    d.rounded_rectangle((92 * K, 578 * K, (92 + nw) * K, 616 * K), radius=int(14 * K), fill=col, outline=INK, width=int(3 * K))
-    c.stext(92 + nw / 2, 597, name, 22, (255, 255, 255))
-    txt = ln["text"]
-    if len(txt) > 28:
-        mid = len(txt) / 2
-        cands = [i for i, ch in enumerate(txt) if ch in "、。！" and i < len(txt) - 2]
-        cut = min(cands, key=lambda i: abs(i - mid)) if cands else int(mid)
-        txt = txt[:cut + 1] + "\n" + txt[cut + 1:]
-    c.stext(640, 653, txt, 32 if "\n" not in txt else 27, INK, spacing=5)
+    d.rounded_rectangle((22 * K, y0 * K, 698 * K, y1 * K), radius=int(24 * K), fill=(255, 255, 255, 240), outline=INK, width=int(4 * K))
+    nw = 34 + 26 * len(name)
+    d.rounded_rectangle((44 * K, (y0 - 22) * K, (44 + nw) * K, (y0 + 18) * K), radius=int(14 * K), fill=col, outline=INK, width=int(3 * K))
+    c.stext(44 + nw / 2, y0 - 2, name, 23, (255, 255, 255))
+    c.stext(360, cy + 4, "\n".join(lines), size, INK, spacing=lh - size)
+
+
+def header(c, tm):
+    """上部の見出し（ショート動画で何の話か分かるように）。"""
+    if tm < INTRO or tm > END + 0.3:
+        return
+    d = c.d
+    d.rounded_rectangle((60 * K, 44 * K, 660 * K, 108 * K), radius=int(32 * K), fill=(58, 42, 40, 230))
+    c.stext(360, 76, "大学生のお金入門｜72の法則", 30, (255, 214, 90))
 
 
 def title_card(c, tm):
     if tm > INTRO + 0.5:
         return
     rng = np.random.default_rng(2)
-    for i in range(26):  # コインの雨
-        x = rng.uniform(40, 1240)
-        sp = rng.uniform(380, 620)
+    for i in range(34):  # コインの雨
+        x = rng.uniform(30, 690)
+        sp = rng.uniform(700, 1100)
         y = -60 + (tm - rng.uniform(0, 0.8)) * sp
-        if -60 < y < 800:
-            c.d.ellipse(((x - 20) * K, (y - 20) * K, (x + 20) * K, (y + 20) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
-            c.stext(x, y, "¥", 22, (185, 120, 15))
+        if -60 < y < 1350:
+            c.d.ellipse(((x - 22) * K, (y - 22) * K, (x + 22) * K, (y + 22) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
+            c.stext(x, y, "¥", 24, (185, 120, 15))
     a = ease(tm / 0.45) * (1 - ease((tm - INTRO) / 0.5))
-    y = 330 + (1 - a) * -450 if tm < 1 else 330 + (1 - a) * 500
+    y = 560 + (1 - a) * -700 if tm < 1 else 560 + (1 - a) * 800
     if a <= 0.01:
         return
     d = c.d
-    d.rounded_rectangle((230 * K, (y - 125) * K, 1050 * K, (y + 125) * K), radius=int(36 * K), fill=(255, 214, 90), outline=INK, width=int(6 * K))
-    d.rounded_rectangle((246 * K, (y - 109) * K, 1034 * K, (y + 109) * K), radius=int(28 * K), outline=(255, 255, 255), width=int(3 * K))
-    c.stext(640, y - 35, "ユイと ネコ先生", 76, INK, stroke=6, sfill=(255, 255, 255))
-    c.stext(640, y + 58, "〜 大学生のための お金と72の法則 〜", 38, (200, 70, 50))
+    d.rounded_rectangle((40 * K, (y - 190) * K, 680 * K, (y + 190) * K), radius=int(40 * K), fill=(255, 214, 90), outline=INK, width=int(6 * K))
+    d.rounded_rectangle((56 * K, (y - 174) * K, 664 * K, (y + 174) * K), radius=int(32 * K), outline=(255, 255, 255), width=int(3 * K))
+    c.stext(360, y - 70, "ユイと\nネコ先生", 84, INK, stroke=6, sfill=(255, 255, 255), spacing=4)
+    c.stext(360, y + 120, "大学生のための\nお金と72の法則", 40, (200, 70, 50), spacing=8)
 
 
 def ending(c, lt):
     """円形ワイプでまとめ画面へ。"""
     k = ease(lt / 0.6)
-    W, H = int(1280 * K), int(720 * K)
+    W, H = int(VW * K), int(VH * K)
     mask = Image.new("L", (W, H), 255)
     md = ImageDraw.Draw(mask)
-    r = (1 - k) * 800 * K
-    md.ellipse((235 * K - r, 330 * K - r, 235 * K + r, 330 * K + r), fill=0)
+    r = (1 - k) * 1400 * K
+    cx, cy = c.P(YUI_X, 710)
+    md.ellipse((cx - r, cy - r, cx + r, cy + r), fill=0)
     card = Image.new("RGB", (W, H))
     cd = ImageDraw.Draw(card, "RGBA")
-    for i in range(30):
-        y0 = H * i / 30
-        cd.rectangle((0, y0, W, y0 + H / 30 + 1), fill=mix((35, 55, 95), (60, 40, 90), i / 29))
-    cc = Canvas((640, 360, 1.0))
+    for i in range(40):
+        y0 = H * i / 40
+        cd.rectangle((0, y0, W, y0 + H / 40 + 1), fill=mix((35, 55, 95), (60, 40, 90), i / 39))
+    cc = Canvas((VW / 2, VH / 2, 1.0))
     cc.img, cc.d = card, cd
     rng = np.random.default_rng(4)
-    for i in range(40):
-        x, y = rng.uniform(0, 1280), rng.uniform(0, 720)
+    for i in range(60):
+        x, y = rng.uniform(0, VW), rng.uniform(0, VH)
         tw = 0.5 + 0.5 * math.sin(lt * 3 + i)
         cd.ellipse(((x - 2) * K, (y - 2) * K, (x + 2) * K, (y + 2) * K), fill=(255, 255, 255, int(160 * tw)))
-    cc.stext(640, 130, "今日のまとめ", 44, (255, 214, 90))
-    cd.rounded_rectangle((180 * K, 200 * K, 1100 * K, 330 * K), radius=int(24 * K), fill=(255, 255, 255, 30), outline=(255, 214, 90), width=int(3 * K))
-    cc.stext(640, 265, "72 ÷ 年利(%) ＝ お金が2倍になる年数(約)", 44, (255, 255, 255))
-    cc.stext(640, 390, "72 ÷ インフレ率(%) ＝ お金の価値が半分になる年数(約)", 28, (200, 220, 255))
-    cc.stext(640, 450, "生活費は残して、少額から・長く・分散 ／ 新NISAなら利益が非課税", 28, (200, 255, 210))
-    cc.stext(640, 545, "※投資には元本割れのリスクがあります。数値は概算です。", 22, (255, 180, 180))
-    cc.stext(1240, 700, "VOICEVOX:春日部つむぎ / VOICEVOX:青山龍星", 17, (200, 200, 220), anchor="rm")
+    cc.stext(360, 200, "今日のまとめ", 50, (255, 214, 90))
+    cd.rounded_rectangle((40 * K, 270 * K, 680 * K, 450 * K), radius=int(28 * K), fill=(255, 255, 255, 30), outline=(255, 214, 90), width=int(3 * K))
+    cc.stext(360, 360, "72 ÷ 年利(%)\n＝ お金が2倍になる年数", 42, (255, 255, 255), spacing=14)
+    cc.stext(360, 545, "72 ÷ インフレ率(%)\n＝ お金の価値が半分になる年数", 30, (200, 220, 255), spacing=10)
+    cc.stext(360, 690, "生活費は残して\n少額から・長く・分散", 32, (200, 255, 210), spacing=10)
+    cc.stext(360, 810, "新NISAなら 利益が非課税", 32, (255, 236, 140))
+    cc.stext(360, 910, "※投資には元本割れのリスクがあります。\n数値は概算です。", 22, (255, 180, 180), spacing=8)
     for i in range(5):
-        x, y = 360 + i * 140, 625 + math.sin(lt * 4 + i) * 8
-        cd.ellipse(((x - 24) * K, (y - 24) * K, (x + 24) * K, (y + 24) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
-        cc.stext(x, y, "¥", 26, (185, 120, 15))
+        x, y = 120 + i * 120, 1010 + math.sin(lt * 4 + i) * 8
+        cd.ellipse(((x - 26) * K, (y - 26) * K, (x + 26) * K, (y + 26) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
+        cc.stext(x, y, "¥", 28, (185, 120, 15))
+    cc.stext(360, 1090, "VOICEVOX:春日部つむぎ / VOICEVOX:青山龍星", 18, (200, 200, 220))
     c.img.paste(card, (0, 0), mask)
 
 
@@ -809,16 +888,17 @@ def frame(n):
     room(c, tm, idx)
     # ボード
     dur = LINES[idx]["dur"] if 0 <= idx < len(LINES) else 1
-    if idx <= 0:
-        panel_bank(c, max(0, tm - ST[0]))
-    elif idx == 1:
-        panel_inflation(c, lt, dur)
-    elif idx in (2, 3):
-        panel_compound(c, lt if idx == 3 else 0, LINES[3]["dur"])
-    elif idx in (4, 5):
-        panel_rules(c, lt if idx == 5 else 0)
-    else:
-        panel_tree(c, tm - ST[6])
+    with c.at(*BOARD_AT):
+        if idx <= 0:
+            panel_bank(c, max(0, tm - ST[0]))
+        elif idx == 1:
+            panel_inflation(c, lt, dur)
+        elif idx in (2, 3):
+            panel_compound(c, lt if idx == 3 else 0, LINES[3]["dur"])
+        elif idx in (4, 5):
+            panel_rules(c, lt if idx == 5 else 0)
+        else:
+            panel_tree(c, tm - ST[6])
     # 場面ごとの効果背景
     if idx == 2:
         effect_bg(c, tm, "gloom", ease((lt + 0.25) / 0.2))
@@ -828,22 +908,24 @@ def frame(n):
         effect_bg(c, tm, "impact", 1 - ease((lt - 0.9) / 0.35))
     mood = {2: "shock", 4: "excited", 6: "happy"}.get(idx, "normal")
     cat_teacher(c, tm, idx, lt)
-    yui(c, tm, mood, idx)
+    with c.at(*YUI_AT):
+        yui(c, tm, mood, idx)
     # 画面上の文字エフェクト
     if idx == 2 and lt > -0.07:
         k = back((lt + 0.1) / 0.3)
-        c.stext(1010 + math.sin(tm * 30) * 3, 190, "ガーン！", int(100 * k) + 1, (255, 255, 255), stroke=8, sfill=(40, 50, 100))
+        c.stext(360 + math.sin(tm * 30) * 3, 250, "ガーン！", int(110 * k) + 1, (255, 255, 255), stroke=8, sfill=(40, 50, 100))
     if idx == 4 and lt > -0.07:
         k = back((lt + 0.1) / 0.3)
-        c.stext(1020, 200, "ぜんぶ\n投資！？", int(76 * k) + 1, (230, 80, 40), stroke=8, sfill=(255, 255, 255))
-        for i in range(5):
-            a = tm * 2 + i * 1.25
-            x, y = 1020 + math.cos(a) * 170, 330 + math.sin(a) * 150
+        c.stext(360, 250, "ぜんぶ投資！？", int(80 * k) + 1, (230, 80, 40), stroke=8, sfill=(255, 255, 255))
+        for i in range(6):
+            a = tm * 2 + i * 1.05
+            x, y = 360 + math.cos(a) * 300, 300 + math.sin(a) * 110
             c.d.ellipse(((x - 26) * K, (y - 26) * K, (x + 26) * K, (y + 26) * K), fill=(255, 205, 60), outline=(175, 120, 20), width=int(3 * K))
             c.stext(x, y, "¥", 28, (185, 120, 15))
     if idx == 5 and 0.03 <= lt < 1.25:
         k = back(lt / 0.25)
-        c.stext(300, 230, "待ち\nたまえ！", int(110 * k) + 1, (255, 255, 255), stroke=10, sfill=(180, 30, 40))
+        c.stext(360, 220, "待ちたまえ！", int(104 * k) + 1, (255, 255, 255), stroke=10, sfill=(180, 30, 40))
+    header(c, tm)
     subtitle(c, idx, tm)
     title_card(c, tm)
     if idx == len(LINES):

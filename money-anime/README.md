@@ -1,6 +1,6 @@
 # ユイとネコ先生 〜大学生のためのお金と72の法則〜（約46秒）
 
-`money-72.mp4` … 2Dアニメ（1920×1080 / 30fps / 日本語音声・字幕・BGM・効果音つき）
+`money-72-shorts.mp4` … ショート動画用の縦型2Dアニメ（1080×1920 / 30fps / 日本語音声・字幕・BGM・効果音つき）
 
 ## 内容
 大学生のユイが、バイト代10万円を銀行に預けようとしたところから、ネコ先生と次のことを会話で学ぶストーリーです。
@@ -20,7 +20,7 @@
 | 役割 | ツール |
 |---|---|
 | 音声 | [VOICEVOX ENGINE](https://github.com/VOICEVOX/voicevox_engine)（Docker版）。母音のタイミングを口パクに使用 |
-| 絵 | Python + Pillow で1コマずつ描画（カメラのズーム・カット、表情、効果背景）。ネコ先生は `src/cat.py` で口パク・まばたき・うなずき・しっぽ |
+| 絵 | Python + Pillow で1コマずつ描画（カメラのズーム・カット、表情、効果背景）。ネコ先生は `src/cat.py` で口パク（元の「ω」の下で口がなめらかに開く）・まばたき・うなずき・しっぽ |
 | BGM・効果音 | numpy で合成（`src/sound.py`） |
 | 動画 | ffmpeg |
 
@@ -28,5 +28,5 @@
 docker run -d -p 50021:50021 voicevox/voicevox_engine:cpu-latest
 cd src
 python3 tts.py      # lines.tsv → line*.wav と visemes.json
-python3 render.py   # ../money-72.mp4 を出力（python3 render.py 12.5 で1コマだけ確認）
+python3 render.py   # ../money-72-shorts.mp4 を出力（python3 render.py 12.5 で1コマだけ確認）
 ```

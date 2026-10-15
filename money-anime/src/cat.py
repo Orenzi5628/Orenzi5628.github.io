@@ -8,7 +8,7 @@ import os
 from functools import lru_cache
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,7 +56,20 @@ def eye_fur():
     return cols
 
 
-def face_overlay(head, vowel, blink, glint, stern):
+@lru_cache(maxsize=1)
+def below_omega():
+    """口の「ω」の線より下だけを 255 にしたマスク（顔の描き足し範囲・4倍サイズ）。"""
+    o = np.asarray(parts()[0]).astype(int)
+    m = np.zeros((FY1 - FY0, FX1 - FX0), dtype=np.uint8)
+    mx, my = MOUTH
+    for x in range(FX0, FX1):
+        col = o[my - 16:my + 10, x, :3].sum(-1) < 360
+        if abs(x - mx) < 42 and col.any():
+            m[my - 16 + int(np.nonzero(col)[0].max()) - FY0:, x - FX0] = 255
+    return Image.fromarray(m).resize(((FX1 - FX0) * AA, (FY1 - FY0) * AA), Image.NEAREST)
+
+
+def face_overlay(head, mouth, blink, glint, stern):
     """頭パーツのコピーに口・まぶた・メガネの光を描く（4倍で描いて縮小）。"""
     lay = Image.new("RGBA", ((FX1 - FX0) * AA, (FY1 - FY0) * AA))
     d = ImageDraw.Draw(lay)
@@ -81,15 +94,20 @@ def face_overlay(head, vowel, blink, glint, stern):
         for (ex, ey), sgn in zip(EYES, (1, -1)):
             d.line(P(ex - 22 * sgn, ey - 30, ex + 16 * sgn, ey - 22), fill=LINE, width=W(3.5))
     mx, my = MOUTH
-    open_ = {"a": 20, "o": 16, "e": 13, "u": 9, "i": 8}.get(vowel, 0)
-    if open_:
-        w = {"i": 22, "e": 20, "a": 18, "o": 14, "u": 11}[vowel]
-        fur = eye_fur()[0]
-        d.ellipse(P(mx - 36, my - 12, mx + 36, my + 22), fill=fur + (255,))       # 元の口を消す
-        d.chord(P(mx - w, my - 8, mx + w, my - 4 + open_ * 1.6), 0, 180, fill=(140, 60, 72), outline=LINE, width=W(2.5))
-        d.ellipse(P(mx - w * 0.55, my - 3 + open_ * 0.55, mx + w * 0.55, my - 3 + open_ * 1.45), fill=(225, 118, 125))
-        d.arc(P(mx - 32, my - 16, mx + 1, my - 1), 15, 165, fill=LINE, width=W(2.5))  # ω
-        d.arc(P(mx - 1, my - 16, mx + 32, my - 1), 15, 165, fill=LINE, width=W(2.5))
+    level, shape = mouth if mouth else (0.0, None)
+    if level > 0.04:
+        # 元の「ω」の線はそのまま残し、その下に口の中をのぞかせる
+        wide = {"i": 1.25, "e": 1.15, "a": 1.0, "o": 0.8, "u": 0.65}.get(shape, 0.9)
+        w = (9 + 6 * level) * wide
+        h = 3 + 17 * level
+        top = my - 5
+        cav = Image.new("RGBA", lay.size)
+        cd = ImageDraw.Draw(cav)
+        cd.ellipse(P(mx - w, top - 10, mx + w, top + h), fill=(105, 45, 55))
+        if level > 0.35:
+            tw = w * 0.62
+            cd.ellipse(P(mx - tw, top + h * 0.45, mx + tw, top + h * 0.98), fill=(214, 112, 120))
+        lay.paste(cav, (0, 0), ImageChops.multiply(cav.getchannel("A"), below_omega()))
     if glint > 0:  # メガネがキラッ
         for lx, ly in LENSES:
             a = int(230 * glint)
@@ -109,14 +127,14 @@ def face_overlay(head, vowel, blink, glint, stern):
     return h
 
 
-def sprite(tm, vowel=None, blink=False, glint=0.0, stern=False, nod=0.0, lean=0.0):
+def sprite(tm, mouth=None, blink=False, glint=0.0, stern=False, nod=0.0, lean=0.0):
     """元画像サイズの RGBA に全パーツを組み立てる。"""
     head, body, tail = parts()
     out = Image.new("RGBA", body.size)
     sway = math.sin(tm * 1.6) * 6 + math.sin(tm * 3.7) * 2
     out.alpha_composite(tail.rotate(sway, resample=Image.BICUBIC, center=TAIL_PIVOT))
     out.alpha_composite(body)
-    out.alpha_composite(face_overlay(head, vowel, blink, glint, stern).rotate(nod, resample=Image.BICUBIC, center=NECK))
+    out.alpha_composite(face_overlay(head, mouth, blink, glint, stern).rotate(nod, resample=Image.BICUBIC, center=NECK))
     if lean:
         out = out.rotate(lean, resample=Image.BICUBIC, center=(365, FEET_Y))
     return out
