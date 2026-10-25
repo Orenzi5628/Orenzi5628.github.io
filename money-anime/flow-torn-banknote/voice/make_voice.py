@@ -1,4 +1,4 @@
-"""VOICEVOX（青山龍星・しっとり）でナレーションを作る。
+"""VOICEVOX（雀松朱司）でナレーションを作る。
 
 lines.tsv: 1行1クリップ。「読み上げ用の文<TAB>字幕用の文」。
 出力: clip1.wav〜clip4.wav（各クリップ用）、narration_32s.wav（4クリップ分を並べた全体）、subtitles.srt
@@ -8,7 +8,7 @@ import io, json, os, urllib.parse, urllib.request, wave
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SPEAKER, SPEED, CLIP, LEAD, SR = 84, 1.1, 8.0, 0.4, 44100
+SPEAKER, SPEED, CLIP, LEAD, SR = 52, 1.05, 8.0, 0.4, 44100  # 52 = 雀松朱司（ノーマル）
 
 
 def post(path, q, body=None):
@@ -27,7 +27,7 @@ full = np.zeros(int(CLIP * len(rows) * SR), dtype=np.int16)
 srt = []
 for i, (speech, caption) in enumerate(rows):
     q = json.loads(post("audio_query", {"text": speech, "speaker": SPEAKER}))
-    q.update(speedScale=SPEED, intonationScale=1.15, prePhonemeLength=0.0, postPhonemeLength=0.2,
+    q.update(speedScale=SPEED, intonationScale=1.1, prePhonemeLength=0.0, postPhonemeLength=0.2,
              outputSamplingRate=SR, outputStereo=False)
     data = post("synthesis", {"speaker": SPEAKER}, json.dumps(q).encode())
     with wave.open(io.BytesIO(data)) as w:
