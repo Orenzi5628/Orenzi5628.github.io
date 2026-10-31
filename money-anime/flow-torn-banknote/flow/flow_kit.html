@@ -212,9 +212,13 @@ Sound: a light whoosh of wind, a soft paper sound.</textarea>
       <li>クリップの効果音は小さめに下げる</li>
       <li>ナレーション <code>narration_32s.wav</code> を 0 秒の位置に置く（これだけで各クリップと合う）</li>
       <li>字幕 <code>subtitles.srt</code> を読み込む。クリップ2・3は画面の左側を空けてあるので、面積の図（2/3・1/2）を置く</li>
-      <li>最後にまとめ（2/3以上→全額、2/5以上→半額、2/5未満→0円）と「VOICEVOX:雀松朱司」のクレジットを入れる</li>
+      <li>最後にまとめ（2/3以上→全額、2/5以上→半額、2/5未満→0円）を入れる。VOICEVOX の声を使う場合は「VOICEVOX:雀松朱司」のクレジットも入れる</li>
     </ol>
-    <p class="note">ナレーションと字幕のファイルは、GitHub のブランチ <code>claude/money-2d-animation-jp-lmjix7</code> の <code>money-anime/flow-torn-banknote/voice/</code> にあります。</p>
+    <p class="note">ナレーションは2種類あります。どちらも <code>narration_32s.wav</code> と <code>subtitles.srt</code> の組で、GitHub のブランチ <code>claude/money-2d-animation-jp-lmjix7</code> の <code>money-anime/flow-torn-banknote/</code> の中にあります。</p>
+    <ul class="note">
+      <li><code>voice/</code>：VOICEVOX（雀松朱司）の声。クレジット「VOICEVOX:雀松朱司」が必要</li>
+      <li><code>api/out/</code>：Google の Gemini TTS で作った声。VOICEVOX のクレジットは不要</li>
+    </ul>
   </section>
 </main>
 <script>
