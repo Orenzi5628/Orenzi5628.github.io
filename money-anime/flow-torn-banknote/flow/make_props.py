@@ -1,7 +1,7 @@
 """Google Flow の Ingredients（参考画像）に使う、アニメ風の「破れたお札」の画像を作る。
 
 本物のお札に見えないよう、文字・数字・肖像のない簡略化したデザインにしている。
-出力: prop_half.png（まん中で半分に破れた左半分）、prop_corner.png（角が少し欠けたほぼ1枚）、
+出力: prop_full.png（破れていない1枚）、prop_half.png（まん中で半分に破れた左半分）、prop_corner.png（角が少し欠けたほぼ1枚）、
       prop_scrap.png（小さな切れはし）  いずれも 1200x900・白背景
 """
 import math
@@ -110,6 +110,9 @@ def main():
     rng = np.random.default_rng(7)
     cx, cy = W / 2, H / 2
     x0, y0, x1, y1 = cx - NW / 2, cy - NH / 2, cx + NW / 2, cy + NH / 2
+
+    # 0) 破れていない1枚（シリーズ1話のつかみで破る前のお札）
+    save(note_layer(cx, cy, angle=-3), "prop_full.png")
 
     # 1) まん中で半分に破れた左半分（少し右にずらして中央に見せる）
     off = NW / 4
