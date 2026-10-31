@@ -1,0 +1,8 @@
+[
+ {
+  "clip": 1,
+  "error": "API の利用枠が足りません（無料枠のキーでは動画・画像の生成はできません）。Google AI Studio でこのキーのプロジェクトに課金（Billing）を設定してから、もう一度実行してください。\n  詳細: [Error(code='RESOURCE_EXHAUSTED', message='There was a problem processing your request. You will only be charged for tokens successfully generated.')]",
+  "model": "gemini-omni-1.1-flash",
+  "time": "2026-10-26 07:18"
+ }
+]

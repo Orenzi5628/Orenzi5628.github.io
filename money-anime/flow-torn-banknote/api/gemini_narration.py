@@ -4,6 +4,7 @@
   python3 gemini_narration.py --design --yes   声を説明文から作り、試し聞き用 out/voice_preview.wav を保存
   python3 gemini_narration.py --yes            4本のセリフを生成（作った声がなければ先に作る）
   python3 gemini_narration.py --voice Sadaltager --yes   作った声の代わりに既成の声を使う
+  python3 gemini_narration.py --clips 1 --yes  1本目だけ作り直す（ほかの clip*.wav はそのまま使う）
 
 出力（out/）: narration_32s.wav（4クリップ分の通し）、clip1〜4.wav、subtitles.srt
 並べ方は ../voice/（VOICEVOX 版）と同じ：各セリフはクリップの頭から 0.4 秒後に始まり、8 秒に収める。
@@ -28,10 +29,11 @@ VOICE_DESIGN = (
 BASE_STYLE = (
     "Persona: Neko-sensei, a kind and wise cat professor gently explaining money to university students in a short video. "
     "Speak natural, conversational standard Japanese, warm and soft, at a relaxed pace with natural pauses. "
-    "Sound like a real person talking to one student, not like an announcer or a machine."
+    "Sound like a real person talking to one student, not like an announcer or a machine. "
+    "Read the text exactly as written: do not add, drop or change any words or sentence-ending particles."
 )
 LINE_STYLE = [
-    "Begin with a playful, gentle question (light, curious, softly rising at the end), pause briefly, then reveal the answer warmly.",
+    "Begin with a playful, gentle question (light, curious, softly rising at the end), then go straight on and reveal the answer warmly, at a light, natural pace.",
     "Explain clearly and kindly, slightly emphasizing the key fraction and the word 全額.",
     "Kind and reassuring; slightly emphasize 半額 so it sticks.",
     "A little sympathetic at first, then warm encouragement at the end.",
@@ -94,6 +96,13 @@ def srt_time(t):
     return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
 
+def srt_entry(i, caption, dur):
+    t0 = i * CLIP + LEAD
+    cut = min((caption.find(ch) for ch in "。？" if 0 < caption.find(ch) < len(caption) - 1), default=-1)
+    shown = caption[:cut + 1] + "\n" + caption[cut + 1:] if cut > 0 else caption
+    return f"{i + 1}\n{srt_time(t0)} --> {srt_time(t0 + dur)}\n{shown}\n"
+
+
 def design_voice(c):
     v = c.voices.create(store=True, voice={
         "model": MODEL, "type": "prompted", "display_name": "Neko-sensei",
@@ -112,6 +121,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--design", action="store_true", help="声を作り直す（試し聞き音声だけ作って終わる）")
     ap.add_argument("--voice", help="既成の声の名前（例: Sadaltager, Charon, Iapetus）。指定すると作った声は使わない")
+    ap.add_argument("--clips", help="作り直すクリップ番号（例: 1,3）。指定しないと全部")
     ap.add_argument("--yes", action="store_true", help="API を呼んで生成する（料金がかかる場合があります）")
     a = ap.parse_args()
     rows = [r.split("\t") for r in open(LINES, encoding="utf-8").read().strip().split("\n")]
@@ -127,9 +137,20 @@ def main():
         return
     voice = a.voice or (open(VOICE_ID_FILE).read().strip() if os.path.exists(VOICE_ID_FILE) else design_voice(c))
 
+    info_path = os.path.join(OUT, "narration_info.json")
+    durs = json.load(open(info_path)).get("durations", {}) if os.path.exists(info_path) else {}
+    redo = [int(n) - 1 for n in a.clips.split(",")] if a.clips else list(range(len(rows)))
+    for i in range(len(rows)):
+        if i not in redo and (str(i + 1) not in durs or not os.path.exists(os.path.join(OUT, f"clip{i + 1}.wav"))):
+            sys.exit(f"clip{i + 1} がまだありません。--clips を付けずに全部作ってください。")
     full = np.zeros(int(CLIP * len(rows) * SR), dtype=np.float32)
     srt = []
     for i, (speech, caption) in enumerate(rows):
+        if i not in redo:   # 作り直さないクリップは前の音声をそのまま使う
+            clip, dur = read(os.path.join(OUT, f"clip{i + 1}.wav")), durs[str(i + 1)]
+            full[int(i * CLIP * SR):int(i * CLIP * SR) + len(clip)] = clip[:int(CLIP * SR)]
+            srt.append(srt_entry(i, caption, dur))
+            continue
         it = c.interactions.create(
             model=MODEL,
             input=[{"type": "text", "text": speech,
@@ -151,14 +172,12 @@ def main():
         clip[int(LEAD * SR):int(LEAD * SR) + len(x)] = x
         write(os.path.join(OUT, f"clip{i + 1}.wav"), clip)
         full[int(i * CLIP * SR):int((i + 1) * CLIP * SR)] = clip
-        t0 = i * CLIP + LEAD
-        cut = min((caption.find(ch) for ch in "。？" if 0 < caption.find(ch) < len(caption) - 1), default=-1)
-        shown = caption[:cut + 1] + "\n" + caption[cut + 1:] if cut > 0 else caption
-        srt.append(f"{i + 1}\n{srt_time(t0)} --> {srt_time(t0 + dur)}\n{shown}\n")
+        durs[str(i + 1)] = round(dur, 3)
+        srt.append(srt_entry(i, caption, dur))
         print(f"clip{i + 1}: {dur:.2f}秒  {caption}")
     write(os.path.join(OUT, "narration_32s.wav"), full)
     open(os.path.join(OUT, "subtitles.srt"), "w", encoding="utf-8").write("\n".join(srt))
-    json.dump({"model": MODEL, "voice": voice}, open(os.path.join(OUT, "narration_info.json"), "w"), ensure_ascii=False)
+    json.dump({"model": MODEL, "voice": voice, "durations": durs}, open(info_path, "w"), ensure_ascii=False)
     print("できました: out/narration_32s.wav, out/clip1〜4.wav, out/subtitles.srt")
 
 
